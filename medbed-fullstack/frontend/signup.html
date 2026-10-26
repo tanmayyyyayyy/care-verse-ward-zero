@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CareVerse — Create Account</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue-900:#0D2B5E; --blue-700:#1557C0; --blue-500:#1E88E5;
+    --blue-400:#42A5F5; --blue-300:#90CAF9; --blue-100:#E3F2FD;
+    --white:#FFFFFF; --gray-50:#F8FAFC; --gray-100:#F1F5F9;
+    --gray-200:#E2E8F0; --gray-400:#94A3B8; --gray-500:#64748B;
+    --gray-700:#334155; --gray-900:#0F172A;
+    --green:#10B981; --green-bg:#ECFDF5;
+    --red:#EF4444; --red-bg:#FEF2F2;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: linear-gradient(-45deg, #0D2B5E, #1557C0, #1E88E5, #42A5F5);
+    background-size: 400% 400%;
+    animation: gradientFlow 12s ease infinite;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow: hidden;
+  }
+  @keyframes gradientFlow { 0%{background-position:0% 50%;} 50%{background-position:100% 50%;} 100%{background-position:0% 50%;} }
+  body::before, body::after { content:''; position:absolute; border-radius:50%; background:rgba(255,255,255,.04); }
+  body::before { width:600px; height:600px; top:-200px; right:-150px; }
+  body::after  { width:400px; height:400px; bottom:-150px; left:-100px; }
+
+  .bg-grid {
+    position:absolute; inset:0;
+    background: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+    background-size:40px 40px;
+    animation: moveGrid 20s linear infinite;
+    pointer-events:none;
+  }
+  @keyframes moveGrid { from{transform:translate(0,0);} to{transform:translate(-40px,-40px);} }
+
+  .card {
+    background: rgba(255,255,255,0.88);
+    backdrop-filter: blur(25px);
+    border-radius: 24px;
+    box-shadow: 0 30px 80px rgba(13,43,94,.35), inset 0 1px 0 rgba(255,255,255,.4);
+    width: 100%;
+    max-width: 520px;
+    padding: 40px 38px;
+    animation: rise .5s ease forwards;
+    border: 1px solid rgba(255,255,255,0.25);
+    position: relative;
+    z-index: 1;
+  }
+  @keyframes rise { from{transform:translateY(24px);opacity:0;} to{transform:translateY(0);opacity:1;} }
+
+  .logo-row { display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+  .logo-icon {
+    width:42px; height:42px;
+    background: linear-gradient(135deg, var(--blue-500), var(--blue-400));
+    border-radius:12px;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 14px rgba(30,136,229,.4);
+    flex-shrink:0;
+  }
+  .logo-icon svg { width:20px; height:20px; stroke:white; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .logo-text .name { font-size:16px; font-weight:700; color:var(--blue-900); }
+  .logo-text .sub  { font-size:10px; color:var(--gray-400); letter-spacing:.3px; }
+
+  h1 { font-size:24px; font-weight:800; color:var(--gray-900); margin-bottom:4px; letter-spacing:-.3px; }
+  .subtitle { font-size:12px; color:var(--gray-500); margin-bottom:22px; }
+
+  .row-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .form-group { margin-bottom:14px; }
+  label { display:block; font-size:11px; font-weight:600; color:var(--gray-700); margin-bottom:5px; letter-spacing:.3px; text-transform:uppercase; }
+
+  .input-wrap { position:relative; }
+  .input-wrap .icon {
+    position:absolute; left:12px; top:50%; transform:translateY(-50%);
+    width:14px; height:14px; stroke:var(--gray-400); fill:none;
+    stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;
+  }
+  input[type=text], input[type=email], input[type=password], select {
+    width:100%;
+    padding:10px 12px 10px 36px;
+    border:1.5px solid var(--gray-200);
+    border-radius:10px;
+    font-family:'DM Sans',sans-serif;
+    font-size:13px;
+    color:var(--gray-900);
+    background:var(--gray-50);
+    outline:none;
+    transition:all .2s ease;
+  }
+  input:focus { border-color:var(--blue-400); box-shadow:0 0 0 3px rgba(30,136,229,.1); background:white; }
+  select:focus {
+    border-color: var(--blue-400);
+    box-shadow: 0 0 0 3px rgba(30,136,229,.1);
+    background: white;
+  }
+
+  .select-arrow {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: var(--gray-400);
+    pointer-events: none;
+  }
+  input.invalid { border-color:var(--red) !important; }
+
+  .pw-toggle {
+    position:absolute; right:10px; top:50%; transform:translateY(-50%);
+    background:none; border:none; cursor:pointer; padding:2px;
+  }
+  .pw-toggle svg { width:14px; height:14px; stroke:var(--gray-400); fill:none; stroke-width:1.8; stroke-linecap:round; }
+
+  .role-grid {
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:12px;
+    margin-top:6px;
+  }
+
+  .role-card {
+    border:1.5px solid var(--gray-200);
+    border-radius:16px;
+    padding:16px 10px;
+    text-align:center;
+    cursor:pointer;
+    transition:all .25s ease;
+    background:rgba(255,255,255,.9);
+    box-shadow:0 8px 20px rgba(15,23,42,.05);
+    min-height:96px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+  }
+
+  .role-card:hover {
+    border-color:var(--blue-300);
+    background:var(--blue-100);
+    transform:translateY(-3px);
+    box-shadow:0 12px 24px rgba(30,136,229,.12);
+  }
+
+  .role-card.selected {
+    border-color:var(--blue-500);
+    background:linear-gradient(135deg, rgba(227,242,253,.95), rgba(255,255,255,.95));
+    box-shadow:0 0 0 3px rgba(30,136,229,.15), 0 12px 24px rgba(30,136,229,.16);
+    transform:translateY(-2px) scale(1.02);
+  }
+
+  .role-icon {
+    font-size:24px;
+    display:block;
+    margin-bottom:8px;
+  }
+
+  .role-name {
+    font-size:11px;
+    font-weight:800;
+    color:var(--gray-700);
+    letter-spacing:.6px;
+  }
+
+  .role-desc {
+    font-size:9px;
+    color:var(--gray-500);
+    margin-top:4px;
+    text-align:center;
+    line-height:1.3;
+  }
+
+  .role-card.selected .role-name {
+    color:var(--blue-700);
+  }
+
+  @media (max-width: 520px) {
+    .role-grid {
+      grid-template-columns:1fr;
+    }
+  }
+
+  .pw-strength { margin-top:4px; height:3px; border-radius:10px; background:var(--gray-100); overflow:hidden; }
+  .pw-strength-fill { height:100%; border-radius:10px; transition:width .3s, background .3s; width:0; }
+  .pw-hint { font-size:10px; color:var(--gray-400); margin-top:3px; }
+
+  .btn-primary {
+    width:100%; padding:13px;
+    background:linear-gradient(135deg,#1E88E5,#0D47A1);
+    color:white; border:none; border-radius:10px;
+    font-family:'DM Sans',sans-serif; font-size:14px; font-weight:700;
+    cursor:pointer; letter-spacing:.3px; transition:all .22s ease;
+    box-shadow:0 6px 20px rgba(30,136,229,.4);
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    margin-top:6px;
+  }
+  .btn-primary:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 10px 28px rgba(30,136,229,.55); }
+  .btn-primary:active { transform:scale(0.97); }
+  .btn-primary:disabled { opacity:.65; cursor:not-allowed; transform:none; }
+  .spinner { width:16px; height:16px; border:2px solid rgba(255,255,255,.3); border-top-color:white; border-radius:50%; animation:spin .7s linear infinite; display:none; }
+  @keyframes spin { to{transform:rotate(360deg);} }
+  .btn-primary.loading .spinner { display:block; }
+  .btn-primary.loading .btn-label { display:none; }
+
+  .alert { padding:10px 14px; border-radius:9px; font-size:12px; font-weight:500; margin-bottom:14px; display:none; align-items:flex-start; gap:8px; line-height:1.4; }
+  .alert.show { display:flex; }
+  .alert.error   { background:var(--red-bg);  color:#991B1B; border:1px solid rgba(239,68,68,.25); }
+  .alert.success { background:var(--green-bg); color:#065F46; border:1px solid rgba(16,185,129,.3); }
+  .alert svg { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; flex-shrink:0; margin-top:1px; }
+
+  .field-error { font-size:10px; color:var(--red); margin-top:3px; display:none; }
+  .field-error.show { display:block; }
+
+  .divider { height:1px; background:var(--gray-100); margin:18px 0; }
+  .footer-link { text-align:center; font-size:13px; color:var(--gray-500); }
+  .footer-link a { color:var(--blue-500); font-weight:600; text-decoration:none; }
+  .footer-link a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="card">
+
+  <div class="logo-row">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+    </div>
+    <div class="logo-text">
+      <div class="name">CareVerse</div>
+      <div class="sub">Where Every Patient Transfer is Safe, Smart and Error-Free</div>
+    </div>
+  </div>
+
+  <h1>Create your account</h1>
+  <p class="subtitle">Join your hospital team on CareVerse — get instant dashboard access</p>
+
+  <div class="alert error" id="alertError">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span id="alertErrorMsg">Something went wrong.</span>
+  </div>
+  <div class="alert success" id="alertSuccess">
+    <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    <span>Account created! Opening CareVerse dashboard…</span>
+  </div>
+
+  <form id="signupForm" novalidate>
+
+    <div class="row-2">
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <div class="input-wrap">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <input type="text" id="name" placeholder="Dr. Ramesh Kumar" required>
+        </div>
+        <div class="field-error" id="nameErr">Name is required.</div>
+      </div>
+      <div class="form-group">
+        <label for="department">Department</label>
+        <div class="input-wrap">
+          <svg class="icon" viewBox="0 0 24 24">
+            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          <select id="department" required>
+            <option value="">Select Department</option>
+            <option value="Emergency Medicine">Emergency Medicine</option>
+            <option value="ICU / Critical Care">ICU / Critical Care</option>
+            <option value="Cardiology">Cardiology</option>
+            <option value="Neurology">Neurology</option>
+            <option value="Neurosurgery">Neurosurgery</option>
+            <option value="Trauma & Orthopedics">Trauma & Orthopedics</option>
+            <option value="Pulmonology">Pulmonology</option>
+            <option value="General Surgery">General Surgery</option>
+            <option value="Radiology">Radiology</option>
+            <option value="Pediatrics">Pediatrics</option>
+            <option value="Oncology">Oncology</option>
+            <option value="Administration">Administration</option>
+          </select>
+          <span class="select-arrow">⌄</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="email">Email Address</label>
+      <div class="input-wrap">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        <input type="email" id="email" placeholder="doctor@hospital.com" required>
+      </div>
+      <div class="field-error" id="emailErr">Enter a valid email address.</div>
+    </div>
+
+    <div class="form-group">
+      <label for="password">Password</label>
+      <div class="input-wrap">
+        <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        <input type="password" id="password" placeholder="Min. 8 characters" oninput="checkStrength(this.value)" required>
+        <button type="button" class="pw-toggle" onclick="togglePw()">
+          <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <div class="pw-strength"><div class="pw-strength-fill" id="pwBar"></div></div>
+      <div class="pw-hint" id="pwHint">Enter a password</div>
+      <div class="field-error" id="pwErr">Password must be at least 8 characters.</div>
+    </div>
+
+    <div class="form-group">
+      <label>Select Your Role</label>
+      <div class="role-grid">
+<div class="role-card selected" data-role="doctor" onclick="selectRole('doctor', this)">
+  <span class="role-icon">🩺</span>
+  <div class="role-name">DOCTOR</div>
+  <div class="role-desc">Clinical dashboard<br>alert actions</div>
+</div>
+
+<div class="role-card" data-role="nurse" onclick="selectRole('nurse', this)">
+  <span class="role-icon">💉</span>
+  <div class="role-name">NURSE</div>
+  <div class="role-desc">Vitals monitoring<br>patient care</div>
+</div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn-primary" id="signupBtn">
+      <div class="spinner"></div>
+      <span class="btn-label">Create Account & Open Dashboard →</span>
+    </button>
+  </form>
+
+  <div class="divider"></div>
+  <div class="footer-link">
+    Already have an account? <a href="login.html">Sign in</a>
+  </div>
+</div>
+
+<script>
+  (function checkSession() {
+    if (localStorage.getItem('medbed_token')) window.location.replace('index.html');
+    localStorage.removeItem('careverse_token');
+    localStorage.removeItem('careverse_user');
+  })();
+
+  let selectedRole = 'doctor';
+
+  function selectRole(role, el) {
+    selectedRole = role;
+    document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+
+  function togglePw() {
+    const pw = document.getElementById('password');
+    pw.type = pw.type === 'password' ? 'text' : 'password';
+  }
+
+  function checkStrength(val) {
+    const bar = document.getElementById('pwBar'), hint = document.getElementById('pwHint');
+    let s = 0;
+    if (val.length >= 8) s++;
+    if (val.length >= 12) s++;
+    if (/[A-Z]/.test(val)) s++;
+    if (/[0-9]/.test(val)) s++;
+    if (/[^A-Za-z0-9]/.test(val)) s++;
+    const lvl = Math.min(s, 4);
+    const levels = [
+      { w:'0%',   bg:'transparent', text:'Enter a password' },
+      { w:'25%',  bg:'#EF4444',     text:'Weak' },
+      { w:'50%',  bg:'#F59E0B',     text:'Fair' },
+      { w:'75%',  bg:'#3B82F6',     text:'Good' },
+      { w:'100%', bg:'#10B981',     text:'Strong ✓' },
+    ];
+    bar.style.width = levels[lvl].w; bar.style.background = levels[lvl].bg;
+    hint.textContent = levels[lvl].text; hint.style.color = levels[lvl].bg;
+  }
+
+  function showError(msg) {
+    document.getElementById('alertErrorMsg').textContent = msg;
+    document.getElementById('alertError').classList.add('show');
+    document.getElementById('alertSuccess').classList.remove('show');
+  }
+  function setLoading(on) {
+    const btn = document.getElementById('signupBtn');
+    btn.classList.toggle('loading', on);
+    btn.disabled = on;
+  }
+
+  document.getElementById('signupForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    document.querySelectorAll('.field-error').forEach(el => el.classList.remove('show'));
+    document.querySelectorAll('input').forEach(el => el.classList.remove('invalid'));
+
+    const name = document.getElementById('name').value.trim();
+    const department = document.getElementById('department').value.trim();
+    const email = document.getElementById('email').value.trim().toLowerCase();
+    const password = document.getElementById('password').value;
+
+    let valid = true;
+    if (!name) { document.getElementById('nameErr').classList.add('show'); document.getElementById('name').classList.add('invalid'); valid = false; }
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) { document.getElementById('emailErr').classList.add('show'); document.getElementById('email').classList.add('invalid'); valid = false; }
+    if (!password || password.length < 8) { document.getElementById('pwErr').classList.add('show'); document.getElementById('password').classList.add('invalid'); valid = false; }
+    if (!valid) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password, role: selectedRole, department }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const detail = data.message || data.errors?.[0]?.msg || 'Unable to create account.';
+        throw new Error(detail);
+      }
+
+      localStorage.setItem('medbed_token', data.token);
+      localStorage.setItem('medbed_user', JSON.stringify(data.user));
+
+      document.getElementById('alertSuccess').classList.add('show');
+      document.getElementById('alertError').classList.remove('show');
+
+      const card = document.querySelector('.card');
+      card.style.transition = 'all .4s ease';
+      card.style.transform = 'scale(1.03)';
+      card.style.boxShadow = '0 50px 120px rgba(16,185,129,.45)';
+
+      setTimeout(function() {
+        window.location.replace('index.html');
+      }, 800);
+    } catch (error) {
+      showError(error.message || 'Unable to create account. Check the backend connection.');
+      setLoading(false);
+    }
+  });
+
+  document.getElementById('email').addEventListener('blur', function() {
+    if (this.value && !/^\S+@\S+\.\S+$/.test(this.value)) {
+      document.getElementById('emailErr').textContent = 'Invalid email format.';
+      document.getElementById('emailErr').classList.add('show');
+      this.classList.add('invalid');
+    }
+  });
+
+  document.querySelectorAll('input').forEach(function(input) {
+    input.addEventListener('input', function() { this.classList.remove('invalid'); });
+  });
+</script>
+</body>
+</html>
