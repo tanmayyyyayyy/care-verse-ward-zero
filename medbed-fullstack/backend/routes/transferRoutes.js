@@ -4,11 +4,14 @@ const express = require('express');
 const {
   getAllTransfers, getTransfer, createTransfer,
   updateTransfer, approveTransfer, updateProgress,
+  assessTransfer,
 } = require('../controllers/transferController');
 const { protect, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(protect);
+
+router.post('/assess', assessTransfer);
 
 router.route('/')
   .get(getAllTransfers)

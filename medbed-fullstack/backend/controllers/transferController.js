@@ -161,3 +161,58 @@ exports.updateProgress = async (req, res, next) => {
     next(error);
   }
 };
+
+// ── POST /api/transfers/assess ───────────────────────────────────────────────
+// ML-driven transfer assessment (staff count, risk level, estimated time)
+exports.assessTransfer = async (req, res, next) => {
+  try {
+    const ml = require('../services/mlPredictionService');
+    const Vitals = require('../models/Vitals');
+    let payload = { ...req.body };
+
+    if (req.body.patient) {
+      const patient = await Patient.findById(req.body.patient);
+      if (patient) {
+        const latestVitals = await Vitals.findOne({ patient: patient._id }).sort({
+          observedAt: -1,
+          recordedAt: -1,
+        });
+
+        const conditionMap = { General: 0, Cardiac: 1, Respiratory: 2, Neuro: 3, ICU: 4 };
+
+        payload = {
+          age: patient.age || 60,
+          weight_kg: req.body.weight_kg || 70,
+          condition: conditionMap[patient.condition] ?? 0,
+          department_from: req.body.department_from ?? 0,
+          department_to: req.body.department_to ?? 1,
+          heart_rate: latestVitals ? latestVitals.heartRate : (req.body.heart_rate || 80),
+          spo2: latestVitals ? latestVitals.spo2 : (req.body.spo2 || 98),
+          bp_systolic: latestVitals ? latestVitals.bpSystolic : (req.body.bp_systolic || 120),
+          bp_diastolic: latestVitals ? latestVitals.bpDiastolic : (req.body.bp_diastolic || 80),
+          transfer_distance: req.body.transfer_distance || 150.0,
+          time_of_day: new Date().getHours(),
+          is_post_surgery: req.body.is_post_surgery ? 1 : 0,
+          equipment_count: req.body.equipment_count || 1,
+          ...req.body,
+        };
+      }
+    }
+
+    const prediction = await ml.predictTransfer(payload);
+    res.status(200).json({
+      success: true,
+      data: {
+        prediction,
+        recommendation:
+          prediction.risk_level === 2
+            ? 'delay_transfer'
+            : prediction.risk_level === 1
+            ? 'proceed_with_caution'
+            : 'proceed',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

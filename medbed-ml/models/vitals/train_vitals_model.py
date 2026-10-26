@@ -214,13 +214,18 @@ def train():
                      for i, c in enumerate(class_counts)}
     print(f"    Class weights: {class_weights}")
 
+    sample_weights = {
+        'alert_class': np.array([class_weights[y] for y in yc_train], dtype=np.float32),
+        'deteri_prob': np.ones(len(yc_train), dtype=np.float32),
+    }
+
     history = lstm_model.fit(
         X_seq_train_s,
         {'alert_class': yc_train, 'deteri_prob': yp_train},
+        sample_weight     = sample_weights,
         validation_split  = 0.15,
         epochs            = 60,
         batch_size        = 32,
-        class_weight      = class_weights,
         callbacks         = callbacks,
         verbose           = 1,
     )

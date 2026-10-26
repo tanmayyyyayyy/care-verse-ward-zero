@@ -1,0 +1,57 @@
+{
+  "feature_cols": [
+    "age",
+    "weight_kg",
+    "heart_rate",
+    "spo2",
+    "bp_systolic",
+    "bp_diastolic",
+    "transfer_distance",
+    "time_of_day",
+    "equipment_count",
+    "pulse_pressure",
+    "map",
+    "shock_index",
+    "icu_to_icu",
+    "is_night",
+    "age_weight_ratio",
+    "condition",
+    "department_from",
+    "department_to",
+    "is_post_surgery"
+  ],
+  "numeric_features": [
+    "age",
+    "weight_kg",
+    "heart_rate",
+    "spo2",
+    "bp_systolic",
+    "bp_diastolic",
+    "transfer_distance",
+    "time_of_day",
+    "equipment_count",
+    "pulse_pressure",
+    "map",
+    "shock_index",
+    "icu_to_icu",
+    "is_night",
+    "age_weight_ratio"
+  ],
+  "cat_features": [
+    "condition",
+    "department_from",
+    "department_to",
+    "is_post_surgery"
+  ],
+  "risk_labels": {
+    "0": "Low",
+    "1": "Medium",
+    "2": "High"
+  },
+  "staff_labels": {
+    "1": "1 Staff",
+    "2": "2 Staff",
+    "3": "3 Staff",
+    "4": "4 Staff"
+  }
+}

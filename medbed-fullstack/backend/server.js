@@ -23,8 +23,11 @@ const transferRoutes  = require('./routes/transferRoutes');
 const alertRoutes     = require('./routes/alertRoutes');
 const hospitalRoutes  = require('./routes/hospitalRoutes');
 const auditRoutes     = require('./routes/auditRoutes');
+const mlRoutes        = require('./routes/mlRoutes');
 const { initBedSensorEmitter } = require('./sockets/bedSensorEmitter');
 const { startPatientMonitor } = require('./services/patientMonitorService');
+const { initMLBroadcaster } = require('./sockets/mlSocketBroadcaster');
+const mlPredictionService = require('./services/mlPredictionService');
 
 if (!process.env.JWT_SECRET) {
   console.error('JWT_SECRET is not set. Refusing to start with broken authentication.');
@@ -107,6 +110,7 @@ app.use('/api/transfers',  transferRoutes);
 app.use('/api/alerts',     alertRoutes);
 app.use('/api/hospitals',  hospitalRoutes);
 app.use('/api/audit',      auditRoutes);
+app.use('/api/ml',         mlRoutes);
 
 // ── Health checks ────────────────────────────────────────────────────────────
 const MONGO_STATES = {
@@ -145,9 +149,10 @@ app.get('/api/health/ready', async (req, res) => {
   }
 
   const ai = await aiService.checkHealth();
+  const ml = await mlPredictionService.checkHealth();
   const databaseReady = mongoStatus === 'up';
   const overallStatus = databaseReady
-    ? ai.status === 'up'
+    ? (ai.status === 'up' && ml.ok)
       ? 'ready'
       : 'degraded'
     : 'not_ready';
@@ -169,8 +174,16 @@ app.get('/api/health/ready', async (req, res) => {
         ...ai,
         required: false,
       },
+      ml: {
+        status: ml.ok ? 'up' : 'down',
+        url: process.env.ML_SERVICE_URL || 'http://127.0.0.1:8001',
+        modelsLoaded: ml.models_loaded || [],
+        modelsReady: ml.models_ready || 0,
+        required: false,
+        ...(ml.error ? { error: ml.error } : {}),
+      },
     },
-    degraded: databaseReady && ai.status !== 'up',
+    degraded: databaseReady && (ai.status !== 'up' || !ml.ok),
   });
 });
 
@@ -205,6 +218,7 @@ app.set('io', io);
 
 // Boot socket handlers
 initSockets(io);
+initMLBroadcaster(io);
 
 initBedSensorEmitter(io);
 // ── Start listening ──────────────────────────────────────────────────────────

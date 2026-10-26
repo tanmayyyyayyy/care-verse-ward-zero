@@ -149,13 +149,10 @@ worth more than many disconnected demos.
 | Frontend | `medbed-fullstack/frontend/login.html` | Served by backend at `/login.html`; use the backend origin so `/api` and Socket.IO are same-origin | 5000 via backend (5001 used for local verification) | Backend JWT auth and live REST/Socket.IO dashboard wired; browser-verified with temporary Playwright tooling at desktop and `390x844` |
 | Node backend | `medbed-fullstack/backend/server.js` | `cd medbed-fullstack/backend && npm install && npm run seed && npm start` (or `npm run dev`) | 5000 | Dependencies installed; Atlas connection, seed, readiness, auth/RBAC, ingestion, simulation, alerts, escalation, audit, and 21 tests verified |
 | AI service | `medbed-fullstack/ai-service/api.py` | `cd medbed-fullstack/ai-service && python3.11 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && python train.py` then `uvicorn api:app --host 127.0.0.1 --port 8000` | 8000 | Verified on Python 3.11: dependencies installed, model artefacts generated, `/health`, `/predict`, `/route` passed |
-| ML service | `medbed-ml/api/ml_api.py` | `cd medbed-ml && pip install -r requirements.txt && python train_all.py` then `uvicorn api.ml_api:app --host 0.0.0.0 --port 8000 --reload` | 8000 | Code present; model artefacts absent; not wired; port conflicts with AI service; not installed |
-| ML training | `medbed-ml/train_all.py` | `python train_all.py` | n/a | Generates datasets and trains three model families; untested |
+| ML service | `medbed-ml/api/ml_api.py` | `source /tmp/wardzero-ml-venv/bin/activate && python -m uvicorn api.ml_api:app --host 127.0.0.1 --port 8001` | 8001 | Installed & verified on Python 3.11: 3 model families trained, `/health`, `/predict/transfer`, `/predict/vitals`, `/predict/safety`, `/predict/all` active & wired to Node backend (`ML_SERVICE_URL=http://127.0.0.1:8001`) |
+| ML training | `medbed-ml/train_all.py` | `python train_all.py` | n/a | Generates datasets and trains three model families (Transfer GB+RF, Vitals BiLSTM+GB ensemble, Safety RF+GB); trained and verified |
 
-Important: both Python services default to port 8000. They cannot both run on
-the default configuration at the same time. Only `medbed-fullstack/ai-service`
-is called by the Node backend (`AI_SERVICE_URL`). The `medbed-ml` service is not
-currently called by the backend.
+Port allocation: `medbed-fullstack/ai-service` runs on port 8000 (`AI_SERVICE_URL`), while `medbed-ml` runs on port 8001 (`ML_SERVICE_URL`). Both run concurrently and report into the Node backend `/api/health/ready` check and live Socket.IO broadcaster.
 
 ### 3.3 Actual HTTP API surface
 
@@ -743,15 +740,13 @@ Notes:
    permanent validation failures, and optional disk persistence.
 4. **No caregiver check-in/check-out.** Alert assignment uses `assignedDoctor`
    and role-based escalation; there is no shift presence model.
-5. **`medbed-ml` is not integrated.** Its models/datasets are absent and no code
-   calls `initMLBroadcaster` or `mlPredictionService`. The simpler AI service is
-   the only wired model.
+5. **`medbed-ml` fully integrated:** Trained all 3 production models (Transfer GradientBoosting+RF, Vitals BiLSTM+GB ensemble, Safety RF+GB). Running on port 8001 via FastAPI (`ML_SERVICE_URL=http://127.0.0.1:8001`). Wired into backend (`mlPredictionService.js`, `mlSocketBroadcaster.js`, `mlRoutes.js`, `/api/health/ready`, `/api/transfers/assess`, `bedSensorEmitter.js`) and frontend (`ml_socket_client.js`).
 6. **Python 3.13 incompatible with pinned AI stack.** NumPy 1.26.3 and
    TensorFlow 2.15.0 have no Python 3.13 wheels. Use Python 3.11 (verified).
 7. **macOS port 5000 conflict.** Control Center / AirPlay Receiver owns `:5000`.
    Use `PORT=5001` locally.
-8. **Port conflict between Python services.** Both default to `:8000`; run only
-   the simple AI service for this demo.
+8. **Python service ports resolved.** Simple AI service runs on `:8000`; `medbed-ml`
+   runs on `:8001`. Both report health to the Node backend readiness probe.
 9. **Demo script absent.** A timed ~3-minute demonstration plan is not written.
 10. **Documentation lag.** This file and backend docs are current, but legacy
     README marketing text and `medbed-ml` performance tables are not measured
@@ -766,10 +761,13 @@ Notes:
 3. **Missing environment template.** Added
    `medbed-fullstack/backend/.env.example` with placeholders only.
 
-### 10.3 Decisions applied for the first slice
+### 10.3 Decisions applied for the current architecture
 
-1. **AI service:** The simpler `medbed-fullstack/ai-service` current-state
-   classifier is the only wired model. `medbed-ml` remains out of scope.
+1. **AI & ML services:** Both services are active in parallel. The simpler
+   `medbed-fullstack/ai-service` (:8000) handles single-reading threshold risk classification.
+   The 3-model `medbed-ml` stack (:8001) provides time-series deterioration forecasting
+   (BiLSTM+GB ensemble), bed weight/pressure/fall risk safety inference, and pre-transfer
+   risk/staff/duration assessment. Both are monitored by `/api/health/ready`.
 2. **Prediction claim:** The UI and docs describe current-state risk
    assessment, not 24–48 hour deterioration forecasting.
 3. **Frontend:** The existing `index.html` was wired to backend REST/Socket.IO;
