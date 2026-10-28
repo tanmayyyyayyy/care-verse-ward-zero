@@ -1,587 +1,325 @@
-# Care-Verse 🏥
-### AI-Powered Smart Healthcare & Patient Transfer Platform
+# Care-Verse: Ward Zero
 
-> **Ward Zero prototype status:** this repository now contains a working
-> synthetic demo slice: backend JWT auth, patient/vitals ingestion, offline
-> sensor replay buffer with bounded exponential backoff and dead-lettering,
-> current-state AI risk assessment with a tagged rule fallback, explainable alerts,
-> acknowledge/dismiss/escalate/audit workflows, stale/offline detection, named
-> sensor scenarios, and a dashboard wired to REST/Socket.IO. The test suite includes
-> 34/34 automated backend unit/safety tests (`npm test`) and a reproducible committed
-> Playwright Core browser suite (41/41 checks passed via `npm run test:e2e`),
-> including mobile 390x844 layout, stale/offline safety states, alert
-> ACK/dismiss/L2 escalation, and no-data patient behavior. Run all tests with
-> `npm run test:all` (75/75 passed). See [`CONTEXT.md`](CONTEXT.md) for the verified
-> scope, commands, and known gaps. This is not a clinically validated system. Some
-> sections below are inherited marketing copy; do not quote unmeasured performance claims.
+### Intelligent home-healthcare monitoring and response prototype
 
-## Ward Zero quick start
+> **Status:** hackathon prototype using synthetic data only. This is **not** a
+> clinically validated system. Current-state risk assessment and experimental ML
+> predictions are decision-support signals, not evidence that deterioration will
+> occur 24–48 hours in advance. See [`CONTEXT.md`](CONTEXT.md) for the verified
+> scope, commands, and known gaps.
 
-Requirements: Node.js, Python 3.11, and a MongoDB URI (Atlas is verified).
+Care-Verse: Ward Zero demonstrates a complete monitoring loop:
+
+**Sense → Understand → Predict → Alert → Respond**
+
+- Simulated bed/vitals sensors and named deterioration scenarios
+- Reliable vitals ingestion with duplicate and late-reading handling
+- Current-state risk assessment plus experimental ML prediction services
+- Explainable alerts with acknowledgment, dismissal, escalation, and audit
+- Stale, offline, and no-data safety states that never claim stability
+- Responsive dashboard served by the backend over REST and Socket.IO
+
+---
+
+## Architecture
+
+```text
+                    ┌──────────────────────────────┐
+                    │  Browser dashboard (vanilla) │
+                    │  REST + Socket.IO + JWT auth │
+                    └──────────────┬───────────────┘
+                                   │
+                    ┌──────────────▼───────────────┐
+                    │  Node.js + Express + Socket.IO│
+                    │  auth, patients, alerts,      │
+                    │  transfers, audit, monitoring │
+                    └───────┬──────────────┬────────┘
+                            │              │
+                 ┌──────────▼──────┐  ┌────▼─────────────────────┐
+                 │ MongoDB (Mongoose)│ │ Python prediction services│
+                 │ required          │ │ · ai-service :8000        │
+                 └──────────────────┘ │ · medbed-ml   :8001        │
+                                      └──────────────────────────┘
+```
+
+Services:
+
+| Component | Port | Purpose |
+|---|---:|---|
+| Node backend + frontend | `5001` locally (`5000` default) | API, dashboard, Socket.IO, alert lifecycle, monitor |
+| AI service (`medbed-fullstack/ai-service`) | `8000` | Current-state risk classification from one reading, with a tagged rule fallback |
+| ML service (`medbed-ml`) | `8001` | Transfer, vitals time-series, and bed-safety predictions |
+| MongoDB | `27017` local or Atlas | Required persistence; there is no in-memory fallback |
+
+On macOS, AirPlay Receiver commonly occupies port `5000`. The verified local
+setup uses `PORT=5001`.
+
+---
+
+## Quick start
+
+Requirements:
+
+- Node.js 18+ (verified on Node 25.9)
+- Python 3.11 (verified; do not use 3.13 with the current AI pins)
+- MongoDB local or Atlas (Atlas verified)
+- Google Chrome if you want to run the committed browser suite
+
+### 1. AI service (optional, but recommended)
 
 ```bash
-# 1. AI service (optional; otherwise the backend uses tagged rule fallback)
 cd medbed-fullstack/ai-service
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python train.py
 uvicorn api:app --host 127.0.0.1 --port 8000
-
-# 2. Backend (use 5001 on macOS because AirPlay owns 5000)
-cd medbed-fullstack/backend
-npm install
-cp .env.example .env
-# Set MONGO_URI, JWT_SECRET, PORT=5001 in .env. Never commit .env.
-npm test            # 34/34 unit and safety tests
-npm run test:e2e    # 41/41 Playwright browser checks
-npm run test:all    # 75/75 full test suite
-npm run seed
-npm start
-
-# 3. Open the backend-served dashboard
-# http://127.0.0.1:5001/login.html
 ```
 
-Synthetic demo accounts created by `npm run seed` are
-`admin@careverse.com`, `doctor@careverse.com`, and `nurse@careverse.com` with
-password `WardZero!2026` (override with `DEMO_PASSWORD`). Use synthetic data
-only.
+Without this service the backend still works and labels assessments as
+`fallback` (rule-based).
 
----
+### 2. ML service (optional for the app, required for the full test suite)
 
-Care-Verse is a full-stack healthcare technology platform designed to improve **patient monitoring, risk assessment, hospital coordination, and patient transfers** through a combination of real-time systems, artificial intelligence, and modern web technologies.
-The platform brings together patient data, live vitals, AI-based risk prediction, transfer management, alerts, and role-based healthcare workflows into a unified system.
----
-## 🚀 Overview
-Healthcare teams often need to make rapid decisions while managing patient vitals, transfers, alerts, and coordination between departments or hospitals.
-**Care-Verse** addresses this challenge by providing a centralized platform that enables healthcare staff to:
-- Monitor patients and their vital signs in real time
-- Predict potential patient risks using AI/ML
-- Generate alerts for abnormal vitals
-- Create and manage patient transfer requests
-- Handle transfer approvals and progress
-- Coordinate inter-hospital transfers
-- Manage healthcare staff with role-based permissions
-- Maintain an auditable workflow for critical decisions
-- Connect frontend, backend, database, and AI services into one system
----
-## 🧠 Core Idea
-```text
-                    ┌─────────────────────┐
-                    │      CARE-VERSE     │
-                    │ Smart Healthcare     │
-                    │     Platform        │
-                    └──────────┬──────────┘
-                               │
-          ┌────────────────────┼────────────────────┐
-          │                    │                    │
-          ▼                    ▼                    ▼
-   Patient Monitoring      AI Risk Engine      Transfer System
-          │                    │                    │
-          ▼                    ▼                    ▼
-      Live Vitals         Risk Prediction       Approvals
-      Alerts              Risk Score             Progress
-      Patient Data        Risk Flags             Hospitals
-          │                    │                    │
-          └────────────────────┼────────────────────┘
-                               ▼
-                      Healthcare Dashboard
+```bash
+cd medbed-ml
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python train_all.py
+uvicorn api.ml_api:app --host 127.0.0.1 --port 8001
+```
 
-⸻
+The ML service trains and serves three experimental models:
 
-✨ Key Features
+- **Transfer** — risk level, staff count, estimated duration
+- **Vitals** — time-series alert class and deterioration probability
+- **Safety** — fall risk, bed imbalance, safety alert
 
-👨‍⚕️ Patient Management
+The synthetic datasets and trained model artefacts used by this prototype are
+committed under `medbed-ml/data/` and `medbed-ml/models/`. Retraining overwrites
+them locally.
 
-Healthcare staff can manage patient information and access patient-specific data through a centralized dashboard.
+### 3. Backend
 
-Features include:
-
-* Patient registration
-* Patient records
-* Patient vitals
-* Medical conditions
-* Patient risk information
-* Historical vital readings
-
-⸻
-
-❤️ Real-Time Patient Monitoring
-
-Care-Verse supports real-time monitoring of patient vitals using Socket.IO.
-
-Supported parameters include:
-
-* Heart Rate
-* SpO₂
-* Blood Pressure
-* Other patient monitoring metrics
-
-Abnormal readings can trigger AI analysis and system alerts.
-
-⸻
-
-🤖 AI Risk Prediction
-
-The platform includes a dedicated Python-based AI microservice for patient risk prediction.
-
-The AI service uses:
-
-* Python
-* FastAPI
-* Scikit-learn
-* Random Forest Classification
-
-The model analyzes patient information and vital signs to estimate risk levels such as:
-
-LOW
-MEDIUM
-HIGH
-
-It also provides:
-
-* Risk score
-* Vital abnormality flags
-* Probability distribution
-* Transfer-related risk information
-
-AI Pipeline
-
-Patient Data
-     │
-     ▼
-Vital Signs + Medical Information
-     │
-     ▼
-Feature Engineering
-     │
-     ▼
-Machine Learning Model
-     │
-     ▼
-Risk Prediction
-     │
-     ├── Risk Level
-     ├── Risk Score
-     └── Alert Flags
-
-The system also includes a rule-based fallback mechanism if the AI service becomes unavailable.
-
-⸻
-
-🚑 Smart Patient Transfer
-
-Care-Verse provides a structured workflow for managing patient transfers.
-
-Transfer Request
-       │
-       ▼
-   AI Risk Check
-       │
-       ▼
-Approval Required
-       │
-   ┌───┴────┐
-   ▼        ▼
-Approved  Rejected
-   │
-   ▼
-Transfer In Progress
-   │
-   ▼
-Completed
-
-The transfer system supports:
-
-* Transfer creation
-* Transfer approval/rejection
-* Transfer progress tracking
-* Transfer status management
-* Hospital coordination
-* Audit trails
-
-⸻
-
-🔔 Intelligent Alerts
-
-The system generates alerts based on patient conditions and AI predictions.
-
-Alerts can be generated for:
-
-* Abnormal heart rate
-* Low SpO₂
-* Abnormal blood pressure
-* High patient risk
-* Transfer-related events
-* Critical system conditions
-
-Healthcare staff can acknowledge or dismiss alerts according to their permissions.
-
-⸻
-
-🔐 Authentication & Role-Based Access
-
-Care-Verse uses secure authentication and authorization mechanisms.
-
-Authentication
-
-* JWT-based authentication
-* Password hashing using bcrypt
-* Protected API routes
-* Token-based sessions
-* Role-based authorization
-
-User Roles
-
-Role	Capabilities
-Admin	Full system access
-Doctor	Patient management, approvals, monitoring
-Nurse	Monitoring, vitals, transfers, alerts
-
-Permissions are enforced at the backend level.
-
-⸻
-
-⚡ Real-Time Architecture
-
-The platform uses Socket.IO to provide real-time communication between the frontend and backend.
-
-Real-time events include:
-
-Patient Vitals
-     ↓
-Backend
-     ↓
-AI Analysis
-     ↓
-Risk / Alert Generation
-     ↓
-Socket.IO
-     ↓
-Connected Dashboards
-
-This allows multiple healthcare users to receive important patient and transfer updates without manually refreshing the dashboard.
-
-⸻
-
-🏗️ System Architecture
-
-                         CARE-VERSE
-                              │
-             ┌────────────────┼────────────────┐
-             │                │                │
-             ▼                ▼                ▼
-        Frontend           Backend          AI Service
-      HTML/CSS/JS       Node + Express      Python/FastAPI
-             │                │                │
-             │                ├───────► AI ───┤
-             │                │
-             │                ▼
-             │            MongoDB
-             │
-             ▼
-       Healthcare Users
-
-Technology Flow
-
-Frontend
-   │
-   │ REST API / Socket.IO
-   ▼
-Node.js + Express Backend
-   │
-   ├──────────────► MongoDB
-   │
-   └──────────────► Python AI Service
-                         │
-                         ▼
-                  ML Risk Prediction
-
-⸻
-
-🛠️ Technology Stack
-
-Layer	Technology
-Frontend	HTML, CSS, JavaScript
-Backend	Node.js, Express.js
-Database	MongoDB, Mongoose
-Real-Time	Socket.IO
-Authentication	JWT, bcryptjs
-AI/ML	Python, Scikit-learn
-AI API	FastAPI
-Validation	Express Validator
-Security	Helmet, CORS
-ML Model	Random Forest Classifier
-
-⸻
-
-📁 Repository Structure
-
-Care-Verse/
-│
-├── bed/
-│   └── Bed monitoring / sensor components
-│
-├── medbed-fullstack/
-│   │
-│   ├── backend/
-│   │   ├── config/
-│   │   ├── controllers/
-│   │   ├── middleware/
-│   │   ├── models/
-│   │   ├── routes/
-│   │   ├── services/
-│   │   ├── sockets/
-│   │   └── server.js
-│   │
-│   ├── ai-service/
-│   │   ├── train.py
-│   │   ├── model.py
-│   │   ├── api.py
-│   │   └── requirements.txt
-│   │
-│   └── frontend/
-│       ├── login.html
-│       ├── signup.html
-│       ├── auth.js
-│       └── index.html
-│
-├── medbed-ml/
-│   └── Machine learning components
-│
-├── package.json
-├── package-lock.json
-├── README.md
-└── .gitignore
-
-⸻
-
-🔄 End-to-End Workflow
-
-A typical Care-Verse workflow looks like:
-
-1. Healthcare staff logs in
-             ↓
-2. Staff accesses patient dashboard
-             ↓
-3. Patient vitals are recorded
-             ↓
-4. Backend processes the readings
-             ↓
-5. AI service evaluates patient risk
-             ↓
-6. Risk score and alerts are generated
-             ↓
-7. Healthcare staff receives real-time updates
-             ↓
-8. Transfer request can be created
-             ↓
-9. Authorized staff approves/rejects transfer
-             ↓
-10. Transfer progress is tracked
-             ↓
-11. Transfer is completed
-
-⸻
-
-📊 Data & AI
-
-The AI component is designed around patient physiological and contextual information.
-
-Example Input
-
-Heart Rate
-SpO₂
-Blood Pressure
-Age
-Medical Condition
-Post-Surgery Status
-
-Example Output
-
-{
-  "risk": "medium",
-  "score": 0.73,
-  "flags": {
-    "hr_alert": true,
-    "spo2_alert": false,
-    "bp_alert": true
-  }
-}
-
-The model can be trained using synthetic patient records and provides a foundation for future integration with real-world clinical datasets.
-
-Note: AI predictions are intended as decision-support signals and should not replace professional clinical judgment.
-
-⸻
-
-🔒 Security
-
-Security is an important part of the platform.
-
-Care-Verse implements:
-
-* JWT authentication
-* Password hashing
-* Protected routes
-* Role-based authorization
-* HTTP security headers
-* CORS configuration
-* Input validation
-* Environment-based configuration
-* Separation of AI and backend services
-
-Sensitive configuration such as database credentials and JWT secrets should be stored in environment variables and must not be committed to GitHub.
-
-⸻
-
-⚙️ Local Development
-
-Prerequisites
-
-Make sure you have:
-
-* Node.js 18+
-* Python 3.9+
-* MongoDB
-* npm
-* Git
-
-⸻
-
-1. Clone Repository
-
-git clone https://github.com/tanmayyyyayyy/Care-Verse.git
-cd Care-Verse
-
-⸻
-
-2. Start Backend
-
+```bash
 cd medbed-fullstack/backend
 npm install
 cp .env.example .env
+# Edit .env:
+#   MONGO_URI, JWT_SECRET, PORT=5001
+#   AI_SERVICE_URL=http://127.0.0.1:8000
+#   ML_SERVICE_URL=http://127.0.0.1:8001
+npm run seed
+npm start
+```
 
-Configure your .env file:
+Never commit `.env` or real credentials.
 
-PORT=5000
-NODE_ENV=development
-MONGO_URI=mongodb://localhost:27017/medbed_os
-JWT_SECRET=your_secret_key
-JWT_EXPIRES_IN=7d
-AI_SERVICE_URL=http://localhost:8000
-CLIENT_ORIGIN=http://localhost:3000
+### 4. Open the dashboard
 
-Start the backend:
+```text
+http://127.0.0.1:5001/login.html
+```
 
-npm run dev
+Serve the pages through the backend so `/api` and Socket.IO stay same-origin.
+Do not open the HTML files with `file://`.
 
-Backend:
+Synthetic demo accounts created by `npm run seed`:
 
-http://localhost:5000
+| Role | Email | Password |
+|---|---|---|
+| Admin | `admin@careverse.com` | `WardZero!2026` |
+| Doctor | `doctor@careverse.com` | `WardZero!2026` |
+| Nurse | `nurse@careverse.com` | `WardZero!2026` |
 
-⸻
+Override the password with `DEMO_PASSWORD`. Public signup is limited to
+doctor/nurse; admin accounts come from the seed script.
 
-3. Start AI Service
+---
 
-Open another terminal:
+## Testing
 
-cd medbed-fullstack/ai-service
-python -m venv venv
-source venv/bin/activate
+With MongoDB, AI (`:8000`), and ML (`:8001`) running:
 
-Windows:
+```bash
+cd medbed-fullstack/backend
+npm test            # 39 backend unit, safety, and ML contract tests
+npm run test:e2e    # 41 Playwright browser checks (system Chrome)
+npm run test:all    # both suites
+```
 
-venv\Scripts\activate
+Current verified result: **80/80 checks passed** (39 backend + 41 browser).
 
-Install dependencies:
+`npm test` includes ML contract tests that call `ML_SERVICE_URL`; without the ML
+service those tests fail rather than silently skipping. The browser suite logs
+in with the seeded doctor/admin accounts, mutates synthetic demo data, and
+cleans up the temporary patient it creates.
 
-pip install -r requirements.txt
+The browser suite covers login, session persistence, all six dashboard pages,
+live vitals and assessment display, scenario simulation, alert
+acknowledgment/dismissal, no-data safety behavior, mobile `390x844` layout, and
+zero uncaught page errors.
 
-Train the model:
+---
 
-python train.py
+## Main API surface
 
-Start the AI service:
+All application routes except health and public auth require a JWT bearer token.
 
-uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+| Area | Endpoints |
+|---|---|
+| Auth | `POST /api/auth/signup`, `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`, `PATCH /api/auth/update-password` |
+| Patients | `GET/POST /api/patients`, `GET/PATCH/DELETE /api/patients/:id` |
+| Vitals | `POST/GET /api/patients/:id/vitals`, `POST /api/patients/:id/simulate` |
+| Transfers | `GET/POST /api/transfers`, `GET/PATCH /api/transfers/:id`, approve/assess/progress actions |
+| Alerts | `GET /api/alerts`, `GET /api/alerts/summary`, `PATCH /api/alerts/:id/acknowledge`, `PATCH /api/alerts/:id/dismiss` |
+| Audit | `GET /api/audit` (admin/doctor) |
+| Hospitals | `GET/POST /api/hospitals`, `PATCH/DELETE /api/hospitals/:id` |
+| ML | `GET /api/ml/health`, `POST /api/ml/predict/{transfer,vitals,safety,all}`, `POST /api/ml/patients/:id/assess-transfer` |
+| Health | `GET /api/health` (liveness), `GET /api/health/ready` (Mongo required; AI/ML reported separately) |
 
-AI API:
+Vitals ingestion behavior:
 
-http://localhost:8000
+- Duplicate `readingId` returns HTTP 200 with `duplicate: true` and does not
+  create a second assessment or duplicate alert.
+- Out-of-order readings are stored with `isLate: true` and do not overwrite the
+  current risk or become the latest reading.
+- Server-derived assessment fields cannot be overridden by the request body.
+- Invalid blood pressure (`systolic <= diastolic`) is rejected.
 
-Swagger documentation:
+Role rules are enforced by the backend: public signup is doctor/nurse only,
+patient/transfer approvals require admin/doctor, and patient deletion requires
+admin.
 
-http://localhost:8000/docs
+---
 
-⸻
+## Real-time events
 
-🌐 Application Components
+Socket.IO connections require a JWT in `socket.handshake.auth.token` or an
+`Authorization: Bearer ...` header.
 
-Component	Default Address
-Frontend	Local HTML application
-Backend API	localhost:5000
-AI Service	localhost:8000
-MongoDB	localhost:27017
+| Direction | Events |
+|---|---|
+| Server → client | `system:welcome`, `patient:subscribed`, `bed:sensor`, `vitals:update`, `alert:new`, `alert:acknowledged`, `alert:resolved`, `alert:escalated`, `transfer:*` |
+| Client → server | `subscribe:patient`, `user:activity`, `vitals:push`, `safety:push`, `transfer:assess`, `transfer:progress` |
+| ML predictions | `ml:vitals_prediction`, `ml:safety_prediction`, `ml:transfer_assessment` |
 
-⸻
+---
 
-🧪 API & Developer Documentation
+## Safety behavior
 
-Detailed API documentation, authentication flows, Socket.IO events, database collections, environment variables, and example requests are available inside:
+- Only `live`/`recent` readings are treated as current.
+- Stale readings show `REASSESS`.
+- Offline or missing readings show `UNKNOWN — NO DATA`/`NO DATA`; they never
+  claim the patient is stable.
+- Late or replayed readings do not create active alerts or resolve current
+  alerts based on historical data.
+- Unacknowledged alerts escalate to doctors (level 1) then admins (level 2) after
+  the configured timeout. Escalation changes alert routing only; it never
+  initiates a clinical transfer.
+- Alert acknowledgment is idempotent and audited. Dismissal requires a reason.
+- Duplicate active alerts are suppressed by a dedup key and can recur after
+  resolution/dismissal.
+- If the AI service is unavailable, the backend falls back to labeled rules
+  (for example HR > 100/115, SpO2 < 94/90, systolic BP > 140). Rule fallbacks do
+  not fabricate an ML probability.
 
-medbed-fullstack/README.md
+A reusable `SensorReplayBuffer` module provides FIFO replay, bounded exponential
+backoff, dead-lettering of permanent validation failures, and optional disk
+persistence. It is covered by tests but is **not** wired into the live dashboard
+ingestion path yet.
 
-⸻
+---
 
-🚧 Future Roadmap
+## Prediction scope and limitations
 
-Potential future improvements include:
+- The AI service (`:8000`) performs **current-state** risk classification from a
+  single reading. It is an experimental model trained on synthetic, rule-labeled
+  data.
+- The ML service (`:8001`) provides experimental transfer, vitals time-series,
+  and bed-safety predictions. Its training data is synthetic.
+- No clinical accuracy, precision, recall, ROC AUC, or prospective
+  deterioration-horizon claim is made. Any metric must come from a reproducible
+  run with the command and data split documented.
+- Do not use this repository with real patient data.
 
-* Real hospital/EMR integrations
-* Advanced clinical datasets
-* Deep learning-based risk prediction
-* Predictive deterioration analysis
-* Automated bed allocation
-* Hospital capacity monitoring
-* GPS-based ambulance tracking
-* Multi-hospital coordination
-* Advanced analytics dashboards
-* Mobile application
-* Notification services
-* Explainable AI
-* Cloud deployment
-* Containerized deployment using Docker
-* Comprehensive automated testing
+---
 
-⸻
+## Environment variables
 
-🎯 Vision
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `5000` | Backend HTTP port |
+| `NODE_ENV` | — | Enables development logging |
+| `MONGO_URI` | — | **Required** MongoDB local/Atlas URI |
+| `JWT_SECRET` | — | **Required** JWT signing secret |
+| `JWT_EXPIRES_IN` | `7d` | Token lifetime |
+| `CLIENT_ORIGINS` | local dev origins | Comma-separated CORS origins |
+| `AI_SERVICE_URL` | `http://localhost:8000` | AI service base URL |
+| `ML_SERVICE_URL` | `http://127.0.0.1:8001` | ML service base URL |
+| `ML_TIMEOUT_MS` | `5000` | ML request timeout |
+| `PATIENT_MONITOR_INTERVAL_MS` | `15000` | Stale/offline monitoring interval |
+| `ALERT_ACK_TIMEOUT_SECONDS` | `300` | Escalation timeout |
+| `VITALS_STALE_SECONDS` | `60` | Stale-data threshold |
+| `SENSOR_OFFLINE_SECONDS` | `180` | Offline threshold |
+| `DEMO_PASSWORD` | `WardZero!2026` | Synthetic seed-account password |
 
-Care-Verse aims to move healthcare workflows from reactive monitoring toward proactive, intelligent decision support.
+Use `CLIENT_ORIGINS` (plural), not `CLIENT_ORIGIN`.
 
-By combining:
+---
 
-Real-Time Monitoring + AI + Automation + Healthcare Workflows
+## Repository structure
 
-the platform provides a foundation for smarter patient management and safer, more coordinated transfers.
+```text
+care-verse-ward-zero/
+├── CONTEXT.md                  # authoritative project state and decisions
+├── README.md
+├── bed/                        # richer standalone bed emitter (unused copy)
+├── medbed-fullstack/
+│   ├── backend/
+│   │   ├── config/ controllers/ middleware/ models/ routes/
+│   │   ├── services/           # ingestion, AI/ML clients, alerts, monitor, replay
+│   │   ├── sockets/            # authenticated Socket.IO + bed emitter + ML bridge
+│   │   ├── scripts/seedDemo.js
+│   │   ├── test/               # node:test suites + committed browser E2E
+│   │   └── server.js
+│   ├── ai-service/             # current-state FastAPI risk classifier
+│   └── frontend/               # login, signup, and six-page dashboard
+└── medbed-ml/
+    ├── api/ml_api.py           # transfer/vitals/safety FastAPI service
+    ├── data/                   # synthetic dataset generator + committed CSVs
+    ├── models/                 # training scripts + committed model artefacts
+    ├── backend/                # Node HTTP client + Socket.IO ML bridge
+    └── frontend/ml_socket_client.js
+```
 
-⸻
+`.env`, `node_modules`, Python virtual environments, and the AI service's
+locally generated `.pkl` files are ignored. The `medbed-ml` synthetic datasets
+and trained artefacts are committed.
 
-👨‍💻 Project
+---
 
-Care-Verse
+## Documentation
 
-AI-powered healthcare and smart patient transfer platform.
+- [`CONTEXT.md`](CONTEXT.md) — current verified state, decisions, known gaps
+- [`medbed-fullstack/README.md`](medbed-fullstack/README.md) — backend/frontend details
+- [`medbed-ml/README.md`](medbed-ml/README.md) — ML service details and contracts
 
-Developed by Tanmay Jain
+The illustrative target metrics in the ML README were not measured in this
+repository and should not be treated as results.
 
-⸻
+---
 
-⭐ Support
+## Deferred / future work
 
-If you find this project interesting, consider giving the repository a ⭐ on GitHub.
+- Wire the replay buffer into a live sensor-client ingestion path
+- Caregiver shift check-in/check-out and explicit assignment policy
+- Persisted historical trend endpoints
+- A timed demonstration script
+- Real EMR integrations, clinical datasets, and clinical validation
+- Containerized deployment and multi-site coordination
 
-Care-Verse
-AI • Healthcare • Machine Learning • Real-Time Systems
+---
+
+Developed by Tanmay Jain for the Operation Ward Zero hackathon.

@@ -76,9 +76,9 @@ cp .env.example .env
 # Edit .env — set MONGO_URI and JWT_SECRET. On macOS use PORT=5001.
 
 # Run tests and seed synthetic demo data
-npm test            # 34/34 unit and safety tests
+npm test            # 39/39 backend unit, safety, and ML contract tests
 npm run test:e2e    # 41/41 Playwright browser checks
-npm run test:all    # 75/75 full test suite
+npm run test:all    # 80/80 full test suite
 npm run seed
 
 # Start the backend
@@ -90,6 +90,9 @@ npm start
 Backend runs on the configured port (verified locally at
 **http://localhost:5001**). Demo users are created by `npm run seed` with the
 synthetic demo password `WardZero!2026` unless `DEMO_PASSWORD` is set.
+
+`npm test` includes ML contract tests that call `ML_SERVICE_URL`, so start the
+ML service (Step 3) before running the full suite.
 
 ---
 
@@ -117,7 +120,29 @@ API docs (auto): **http://localhost:8000/docs**
 
 ---
 
-### Step 3 — Frontend
+### Step 3 — ML Service Setup (optional for the app, required for the full suite)
+
+```bash
+cd ../medbed-ml
+
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Generate synthetic datasets and train all three models
+python train_all.py
+
+# Run on 8001 to avoid conflicting with the AI service on 8000
+uvicorn api.ml_api:app --host 127.0.0.1 --port 8001
+```
+
+Set `ML_SERVICE_URL=http://127.0.0.1:8001` in the backend `.env`. Without the
+ML service, the backend still starts but `/api/health/ready` reports `degraded`,
+ML prediction routes fail, and the ML contract tests fail.
+
+---
+
+### Step 4 — Frontend
 
 Serve the frontend through the Node backend so `/api` and Socket.IO are
 same-origin:
@@ -362,9 +387,17 @@ NODE_ENV=development
 MONGO_URI=mongodb://localhost:27017/medbed_os
 JWT_SECRET=your_super_secret_key_here
 JWT_EXPIRES_IN=7d
-AI_SERVICE_URL=http://localhost:8000
-CLIENT_ORIGIN=http://localhost:3000
+AI_SERVICE_URL=http://127.0.0.1:8000
+ML_SERVICE_URL=http://127.0.0.1:8001
+ML_TIMEOUT_MS=5000
+CLIENT_ORIGINS=http://localhost:5001,http://127.0.0.1:5001
+PATIENT_MONITOR_INTERVAL_MS=15000
+ALERT_ACK_TIMEOUT_SECONDS=300
+VITALS_STALE_SECONDS=60
+SENSOR_OFFLINE_SECONDS=180
 ```
+
+Use `CLIENT_ORIGINS` (plural), not `CLIENT_ORIGIN`.
 
 ---
 
@@ -378,6 +411,6 @@ CLIENT_ORIGIN=http://localhost:3000
 | Database    | MongoDB + Mongoose                  |
 | Real-time   | Socket.IO                           |
 | Auth        | JWT (jsonwebtoken) + bcryptjs       |
-| AI/ML       | Python + FastAPI + scikit-learn     |
+| AI/ML       | Python + FastAPI + scikit-learn / TensorFlow |
 | Validation  | express-validator                   |
 | Security    | helmet, cors, bcrypt salt rounds=12 |

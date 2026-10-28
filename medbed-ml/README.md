@@ -1,5 +1,10 @@
 # MedBed OS — ML Prediction System
-## 3 Production-Ready Models for Real-Time Patient Safety
+## 3 Experimental Prediction Models for Real-Time Patient Safety
+
+> **Status:** hackathon prototype using synthetic, rule-derived data. These
+> models are **not** clinically validated and must not be used with real patient
+> data. Performance numbers in this document are illustrative targets, not
+> measured results.
 
 ---
 
@@ -17,7 +22,7 @@
 │        │                                                         │
 │        │  HTTP POST (axios, 5s timeout)                         │
 │        ▼                                                         │
-│  Python FastAPI ML Service  (port 8000)                          │
+│  Python FastAPI ML Service  (port 8001)                          │
 │   ├── /predict/transfer   → GradientBoosting + RF               │
 │   ├── /predict/vitals     → BiLSTM + GradientBoosting           │
 │   └── /predict/safety     → RF + GradientBoosting               │
@@ -47,23 +52,31 @@
 
 ## Quick Start
 
+Use Python 3.11 (do not use 3.13 with the current pins).
+
 ```bash
-# 1. Install Python dependencies
+# 1. Create environment and install dependencies
+python3.11 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Generate datasets + train all 3 models
+# 2. Generate synthetic datasets + train all 3 models
 python train_all.py
 
-# 3. Start ML API
-uvicorn api.ml_api:app --host 0.0.0.0 --port 8000 --reload
+# 3. Start ML API on 8001 (the AI service uses 8000)
+uvicorn api.ml_api:app --host 127.0.0.1 --port 8001
 
-# 4. Add to Node.js backend .env
-ML_SERVICE_URL=http://localhost:8000
-
-# 5. Add to index.html (before </body>)
-# <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
-# <script src="ml_socket_client.js"></script>
+# 4. Point the Node backend at it
+ML_SERVICE_URL=http://127.0.0.1:8001
 ```
+
+The Node backend bridges this service over REST (`/api/ml/*`) and Socket.IO ML
+events. The dashboard already includes `ml_socket_client.js`; adjust that
+helper's backend origin if you are not serving the app from
+`http://localhost:5000`.
+
+The synthetic datasets and trained model artefacts used by this prototype are
+committed under `data/` and `models/`. Retraining overwrites them locally.
 
 ---
 
@@ -152,7 +165,13 @@ WHY Calibrated RF for imbalance_detected:
 
 ---
 
-## Evaluation Metrics (Expected Performance)
+## Illustrative Target Metrics (Not Measured)
+
+> The values below are design targets inherited from the original prototype
+> documentation. They were **not** produced by a reproducible evaluation run in
+> this repository and must not be quoted as results. The only documented
+> training output is the demonstration accuracy reported by `medbed-fullstack/ai-service/train.py`
+> for its separate rule-labeled synthetic dataset.
 
 ### Model 1 — Transfer Risk Level
 | Metric | Low | Medium | High | Macro Avg |
@@ -304,7 +323,7 @@ medbed-ml/
 │       └── safety_config.json
 │
 ├── api/
-│   └── ml_api.py                   ← FastAPI server (port 8000)
+│   └── ml_api.py                   ← FastAPI server (port 8001)
 │
 ├── backend/
 │   ├── mlPredictionService.js      ← Node.js HTTP client
@@ -317,12 +336,15 @@ medbed-ml/
 
 ---
 
-## Production Deployment Tips
+## Deployment Notes (Prototype)
+
+> This service is a hackathon prototype. The steps below are operational notes,
+> not a production-readiness or clinical-safety claim.
 
 **Scale the ML service:**
 ```bash
 # Multiple workers (use Gunicorn + Uvicorn workers)
-gunicorn api.ml_api:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+gunicorn api.ml_api:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8001
 ```
 
 **Retrain on real data:**

@@ -11,8 +11,9 @@ repository is an independent evolution of the copied Care-Verse code.
 
 Status of this document: initial repository inspection, startup baseline
 verification, Node-to-AI integration/readiness work, MongoDB connection
-hardening, a first end-to-end Ward Zero implementation slice, and browser
-verification/UI reliability fixes. The slice includes JWT frontend auth,
+hardening, a first end-to-end Ward Zero implementation slice, browser
+verification/UI reliability fixes, ML service integration, and a documentation
+refresh. The slice includes JWT frontend auth,
 patient/vitals ingestion with deduplication and late-reading handling,
 current-state AI assessment, explainable alerts with
 acknowledgment/dismissal/escalation/audit, stale/offline/no-data safety states,
@@ -50,21 +51,19 @@ Ward Zero demo slice:
   lifecycle fields.
 - The Python AI service is wired for current-state risk assessment. If it is
   unavailable, the Node client returns a clearly tagged rule fallback.
-- A second, more elaborate Python ML service still exists but is not integrated
-  with the Node backend, and its trained models/datasets are absent.
-- `node:test` coverage now includes the AI client plus quality, simulator, and
-  alert-helper tests: 21 tests.
-- Browser-level verification was performed with temporary Playwright Core and
-  system Chrome outside the repository. The final clean-start suite passed 30/30
-  checks, including login/logout, assessment display, scenario selection,
-  stale/offline safety states, alert ACK/dismiss/L2 escalation, reconnect,
-  expired auth, and all six dashboard pages at `390x844`. A separate no-data
-  browser scenario also passed. No browser suite or browser dependency is
-  committed. Screenshots were generated but not
-  visually pixel-reviewed.
+- The `medbed-ml` Python service is integrated with the Node backend on port
+  8001 (transfer, vitals time-series, and bed-safety predictions), exposed
+  through `/api/ml/*` and Socket.IO ML events. Its synthetic datasets and trained
+  models are committed under `medbed-ml/data` and `medbed-ml/models`.
+- `node:test` coverage now includes the AI client, ML contract tests, quality,
+  simulator, alert-helper, replay-buffer, and ingestion-safety tests: 39 tests.
+- A committed Playwright Core browser suite runs against system Chrome and
+  covers login/logout, assessment display, scenario selection, stale/offline
+  safety states, alert ACK/dismiss/L2 escalation, reconnect, expired auth, all
+  six dashboard pages at `390x844`, and no-data behavior: 41 checks.
 - A backend `.env.example` exists; no real `.env` is committed.
-- No commits have been created in this repository; all files are currently
-  untracked.
+- This repository has two local commits pushed to `origin/main` at
+  `tanmayyyyayyy/care-verse-ward-zero`. Generated demo artefacts remain ignored.
 
 Nothing in this document should be read as a claim that a feature is
 runtime-verified. See "Verification" below for what was actually checked.
@@ -126,14 +125,14 @@ worth more than many disconnected demos.
 [MongoDB]
   Required by Node backend via MONGO_URI (no in-memory fallback); Atlas verified.
 
-[medbed-ml]  separate Python ML stack, NOT wired to Node backend
+[medbed-ml]  Python ML stack on :8001, wired to the Node backend
   api/ml_api.py                 -> /predict/transfer, /predict/vitals,
                                    /predict/safety, /predict/all
   models/*/train_*.py           -> three model families
-  backend/mlPredictionService.js
-  backend/sockets/mlSocketBroadcaster.js
+  models/**, data/*.csv          -> committed model artefacts and datasets
+  backend/mlPredictionService.js (Node HTTP client)
+  backend/sockets/mlSocketBroadcaster.js (Socket.IO ML bridge)
   frontend/ml_socket_client.js
-  Expected model artefacts and CSV datasets (ABSENT)
 
 [bed/bedSensorEmitter.js]
   A second, richer standalone copy of the bed sensor emitter.
@@ -146,8 +145,8 @@ worth more than many disconnected demos.
 | Component | Entry point | Documented/available start command | Default port | Actual status |
 |---|---|---|---|---|
 | Root portal | `index.html` | Serve with any static server, e.g. `python3 -m http.server` | n/a | Redirect page only |
-| Frontend | `medbed-fullstack/frontend/login.html` | Served by backend at `/login.html`; use the backend origin so `/api` and Socket.IO are same-origin | 5000 via backend (5001 used for local verification) | Backend JWT auth and live REST/Socket.IO dashboard wired; browser-verified with temporary Playwright tooling at desktop and `390x844` |
-| Node backend | `medbed-fullstack/backend/server.js` | `cd medbed-fullstack/backend && npm install && npm run seed && npm start` (or `npm run dev`) | 5000 | Dependencies installed; Atlas connection, seed, readiness, auth/RBAC, ingestion, simulation, alerts, escalation, audit, and 21 tests verified |
+| Frontend | `medbed-fullstack/frontend/login.html` | Served by backend at `/login.html`; use the backend origin so `/api` and Socket.IO are same-origin | 5000 via backend (5001 used for local verification) | Backend JWT auth and live REST/Socket.IO dashboard wired; committed Playwright suite passes 41/41 at desktop and `390x844` |
+| Node backend | `medbed-fullstack/backend/server.js` | `cd medbed-fullstack/backend && npm install && npm run seed && npm start` (or `npm run dev`) | 5000 | Dependencies installed; Atlas connection, seed, readiness, auth/RBAC, ingestion, simulation, alerts, escalation, audit, and 39 tests verified |
 | AI service | `medbed-fullstack/ai-service/api.py` | `cd medbed-fullstack/ai-service && python3.11 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && python train.py` then `uvicorn api:app --host 127.0.0.1 --port 8000` | 8000 | Verified on Python 3.11: dependencies installed, model artefacts generated, `/health`, `/predict`, `/route` passed |
 | ML service | `medbed-ml/api/ml_api.py` | `source /tmp/wardzero-ml-venv/bin/activate && python -m uvicorn api.ml_api:app --host 127.0.0.1 --port 8001` | 8001 | Installed & verified on Python 3.11: 3 model families trained, `/health`, `/predict/transfer`, `/predict/vitals`, `/predict/safety`, `/predict/all` active & wired to Node backend (`ML_SERVICE_URL=http://127.0.0.1:8001`) |
 | ML training | `medbed-ml/train_all.py` | `python train_all.py` | n/a | Generates datasets and trains three model families (Transfer GB+RF, Vitals BiLSTM+GB ensemble, Safety RF+GB); trained and verified |
@@ -246,7 +245,7 @@ AI service (`medbed-fullstack/ai-service`):
 | POST | `/predict` | Current-state risk classification from one vitals reading |
 | POST | `/route` | Heuristic route suggestion |
 
-ML service (`medbed-ml/api/ml_api.py`, not wired to Node):
+ML service (`medbed-ml/api/ml_api.py`, wired to Node via `/api/ml/*` and the ML socket bridge):
 
 | Method | Endpoint | Purpose |
 |---|---|---|
@@ -296,9 +295,9 @@ Bed sensor emitter (`medbed-fullstack/backend/sockets/bedSensorEmitter.js`):
 ML Socket.IO bridge (`medbed-ml/backend/sockets/mlSocketBroadcaster.js`):
 
 - Defines `vitals:push`, `safety:push`, `transfer:assess`.
-- Would emit `ml:vitals_prediction`, `ml:safety_prediction`,
+- Emits `ml:vitals_prediction`, `ml:safety_prediction`,
   `ml:transfer_assessment`, `alert:new`.
-- `initMLBroadcaster(io)` is not called anywhere in the active backend.
+- `initMLBroadcaster(io)` is called by `server.js`.
 
 ### 3.5 Authentication and authorization as built
 
@@ -379,7 +378,7 @@ Read by code:
 | `SENSOR_OFFLINE_SECONDS` | Data-quality assessment | Default 180 |
 | `DEMO_PASSWORD` | Seed script | Optional override for synthetic demo accounts |
 | `EMAIL_USER`, `EMAIL_PASS` | `utils/sendEmail.js` | Read only if the orphaned email helper is imported; the unused controller import was removed |
-| `ML_SERVICE_URL`, `ML_TIMEOUT_MS` | `medbed-ml/backend/mlPredictionService.js` | Only used if that module is wired in (it is not) |
+| `ML_SERVICE_URL`, `ML_TIMEOUT_MS` | Node ML client, readiness check, ML socket bridge | Defaults `http://127.0.0.1:8001` and `5000` ms |
 
 `CLIENT_ORIGINS` is now read for Express and Socket.IO CORS; the previous
 hard-coded-only behavior is gone. `medbed-fullstack/backend/.env.example`
@@ -409,13 +408,13 @@ real `.env` file is committed.
   `feat_scaler.pkl`, `model_config.json`.
 - Safety: `models/safety/fall_risk_model.pkl`, `imbalance_model.pkl`,
   `alert_model.pkl`, `scaler.pkl`, `safety_config.json`.
-- Datasets expected at `medbed-ml/data/{transfer,vitals,safety}_dataset.csv`.
-- None of those artefacts or CSVs exist; only the generator and training
-  scripts are present.
+- Datasets at `medbed-ml/data/{transfer,vitals,safety}_dataset.csv`.
+- The model artefacts and synthetic CSVs listed above are committed. Retraining
+  overwrites them locally.
 
-The `medbed-ml` README lists performance tables under "Expected Performance".
-Those numbers are not measured in this repository and must not be presented as
-results.
+The `medbed-ml` README lists performance tables under "Illustrative Target
+Metrics (Not Measured)". Those numbers were not measured in this repository and
+must not be presented as results.
 
 ### 3.9 Verification performed
 
@@ -455,13 +454,13 @@ results.
 - Authenticated Socket.IO was verified with a temporary Node `socket.io-client`:
   connection succeeded, `bed:sensor` arrived, and `vitals:update`,
   `alert:new`, and `alert:resolved` arrived after scenario calls.
-- Frontend inline scripts passed `node --check`. A temporary Playwright Core
-  suite using system Chrome (not committed) passed 30/30 checks against a
-  clean-started backend and AI service: login/logout, live vitals and assessment
-  source, non-first patient selection, scenario selection preservation,
-  stale/offline safety presentation, alert ACK/dismiss/L2 escalation, expected
-  400/401 handling, Socket.IO disconnect/reconnect, expired auth, and all six
-  dashboard pages at `390x844` without clipped content.
+- Frontend inline scripts passed `node --check`. The committed Playwright Core
+  suite using system Chrome passed 41/41 checks against a clean-started backend,
+  AI service, and ML service: login/logout, live vitals and assessment source,
+  non-first patient selection, scenario simulation, stale/offline safety
+  presentation, alert ACK/dismiss/L2 escalation, expected 400/401 handling,
+  reconnect, expired auth, no-data behavior, and all six dashboard pages at
+  `390x844` without clipped content.
 - A separate browser test created a temporary synthetic patient with no vitals,
   confirmed `UNKNOWN — NO DATA`, `NO DATA` ECG, a no-data alert, and no
   stability claim, then deactivated the patient and confirmed it disappeared
@@ -488,7 +487,7 @@ following inventory records what exists and the reuse decision to apply.
 | Backend APIs | `medbed-fullstack/backend/controllers`, `routes` | Live Atlas-backed patient/vitals/simulation/alert/audit flow verified by curl | Reuse; add endpoints only where the documented APIs cannot meet a requirement. |
 | Real-time Socket.IO | `sockets/socketManager.js`; controller/service emits | Backend channels implemented; dashboard consumes updates and disconnect/reconnect is browser-verified | Reuse the existing channels; do not invent a parallel channel. |
 | Existing AI risk logic | `medbed-fullstack/ai-service/api.py`, `model.py`, `train.py` | Current-state RF classifier; artefacts generated locally; Node contract mapping works and live `/predict` returns `source=ai` | Reuse as the current-state classifier, clearly labeled as experimental/ML or rule-based. |
-| Existing ML stack | `medbed-ml` | Three model families and API code; no artifacts; not wired | Evaluate before adoption. Do not claim it works or supersede the simpler AI service without evidence. |
+| Existing ML stack | `medbed-ml` | Three trained model families, API code, committed artefacts, and Node/Socket.IO wiring | Reuse the integrated experimental models; do not present them as clinically validated. |
 | Existing frontend | `medbed-fullstack/frontend` | Served by backend; JWT auth and live dashboard browser-verified, including mobile layout and safety states | Reuse layout/components; no frontend framework introduction. |
 | Authentication and authorization | Backend JWT/RBAC; frontend pages now use backend auth | Dashboard flow uses `medbed_token`; `auth.js` mirrors the same keys but is not included | Keep one backend JWT flow; do not reintroduce `careverse_*` demo auth. |
 | Alert workflows | `alertController.js`, `Alert` model, dashboard | Backend ack/dismiss/summary/escalation/resolution implemented and curl-verified; dashboard ACK/dismiss/L2 browser-verified | Reuse backend alert workflow; keep validation and audit behavior. |
@@ -530,7 +529,7 @@ Status definitions used here:
 | Delayed and out-of-order readings | Implemented | `isLate` is computed from `deviceTimestamp`; late readings are stored but do not overwrite current risk and cannot become the latest reading. |
 | Stale-data detection | Implemented | `services/vitalsQuality.js` with configurable stale/offline thresholds. |
 | Sensor-offline alerts | Implemented | Monitor creates `data_stale`/`sensor_offline` alerts; ingestion resolves them after fresh data. |
-| Buffer and safe replay after connectivity interruptions | Implemented | `services/sensorReplayBuffer.js` provides FIFO ordered replay, bounded exponential backoff, duplicate handling, dead-lettering, status reporting, and optional disk persistence; verified by automated tests. |
+| Buffer and safe replay after connectivity interruptions | Partial | `services/sensorReplayBuffer.js` provides FIFO ordered replay, bounded exponential backoff, duplicate handling, dead-lettering, status reporting, and optional disk persistence; verified by automated tests but not yet wired into the live dashboard flow. |
 | Missing/stale data must not be treated as stable | Implemented in data model/UI | No-data/stale/offline states are explicit and displayed; no automatic low-risk update from missing data. |
 
 ### 5.3 Risk assessment
@@ -563,16 +562,16 @@ Status definitions used here:
 | Alerts | Implemented | Dashboard refreshes live alerts, calls acknowledge/dismiss APIs, and preserves selected state; browser-verified. |
 | Caregiver response | Implemented | ACK and dismissal use backend lifecycle endpoints with reasons where required; browser-verified. |
 | Device connectivity | Implemented | Bed telemetry arrives over Socket.IO; patient data quality shows live/stale/offline/no-data states, and stale/offline/no-data UI avoids claiming stability. |
-| One functional monitoring dashboard | Implemented | Existing dashboard is wired to backend REST/Socket.IO without a framework migration; clean-start browser suite passed 30/30. |
+| One functional monitoring dashboard | Implemented | Existing dashboard is wired to backend REST/Socket.IO without a framework migration; committed clean-start browser suite passed 41/41. |
 
 ### 5.6 Documentation
 
 | Requirement | Status | Evidence / gap |
 |---|---|---|
-| Setup instructions | Partial | `.env.example`, seed command, and verified startup commands are documented; some README sections still contain legacy claims. |
-| Architecture documentation | Partial | This file is current; README overview is legacy and includes unverified claims. |
-| Test instructions | Partial | `npm test` runs 21 focused unit tests; API/curl checks are documented. Browser verification used temporary Playwright tooling outside the repo; no E2E suite is committed. |
-| Model limitations | Partial | READMEs mention decision-support caveats, but also include unmeasured performance tables and "production-ready" claims. |
+| Setup instructions | Implemented | `.env.example`, seed command, service ports, and verified startup commands are documented in the root README and backend README. |
+| Architecture documentation | Implemented | This file and the root README describe the current Node + AI + ML + MongoDB architecture. |
+| Test instructions | Implemented | `npm test` runs 39 backend tests; the committed Playwright suite runs 41 browser checks via `npm run test:e2e`/`test:all`. |
+| Model limitations | Implemented | READMEs label the AI/ML outputs experimental and not clinically validated; `medbed-ml` metrics are marked as unmeasured targets. |
 | Demonstration plan (~3 minutes) | Planned | Not present. |
 
 ---
@@ -601,8 +600,8 @@ Mandatory constraints for all work:
   leakage between training and evaluation. Current `train.py` uses a random
   train/test split on synthetic data whose labels are rule-derived; it is a
   demonstration model, not a validated clinical predictor.
-- The `medbed-ml` README's "Expected Performance" tables are not measured
-  results and must not be quoted as results.
+- The `medbed-ml` README's "Illustrative Target Metrics" tables were not
+  measured in this repository and must not be quoted as results.
 - If the ML service is unavailable, the Node fallback uses simple thresholds
   (HR > 100/115, SpO2 < 94/90, systolic BP > 140). These are rules, not ML.
 
@@ -710,8 +709,8 @@ care-verse-ward-zero/
 Notes:
 
 - `script.js` and `style.css` at the root are empty.
-- `medbed-ml/models/*` and `medbed-ml/data/` contain only training/generator
-  scripts; no `.pkl`, `.h5`, `.json`, or `.csv` artefacts.
+- `medbed-ml/models/*` and `medbed-ml/data/` contain the training/generator
+  scripts plus committed `.pkl`, `.h5`, and `.csv` artefacts.
 - `medbed-fullstack/ai-service/risk_model.pkl` and `label_encoder.pkl` were
   generated locally during verification. They are not committed.
 - The backend now includes a seed script (`npm run seed`), and its generated
@@ -731,16 +730,17 @@ Notes:
    committed in the repository at `medbed-fullstack/backend/test/browser.e2e.js`
    and executed via `npm run test:e2e` or `npm run test:all` (41/41 checks passed),
    using Playwright Core with system Chrome.
-2. **Automated safety test coverage expanded:** `npm test` now executes 34/34
-   automated tests, adding replay buffer unit tests (order, bounded exponential
-   backoff, dead-lettering, durability) and ingestion safety tests (duplicate IDs,
-   out-of-order/late readings, DB failures, duplicate alert prevention).
-3. **Sensor replay buffer implemented:** `services/sensorReplayBuffer.js` provides
-   reliable offline buffering, FIFO replay, bounded backoff, dead-lettering of
-   permanent validation failures, and optional disk persistence.
+2. **Automated safety test coverage expanded:** `npm test` now executes 39/39
+   automated tests, including replay buffer unit tests, ingestion safety tests,
+   and ML contract tests that require the ML service on `ML_SERVICE_URL`.
+3. **Sensor replay buffer implemented but not wired into the live flow:**
+   `services/sensorReplayBuffer.js` provides reliable offline buffering, FIFO
+   replay, bounded backoff, dead-lettering of permanent validation failures, and
+   optional disk persistence. It is covered by tests but not yet used by the
+   dashboard ingestion path.
 4. **No caregiver check-in/check-out.** Alert assignment uses `assignedDoctor`
    and role-based escalation; there is no shift presence model.
-5. **`medbed-ml` fully integrated:** Trained all 3 production models (Transfer GradientBoosting+RF, Vitals BiLSTM+GB ensemble, Safety RF+GB). Running on port 8001 via FastAPI (`ML_SERVICE_URL=http://127.0.0.1:8001`). Wired into backend (`mlPredictionService.js`, `mlSocketBroadcaster.js`, `mlRoutes.js`, `/api/health/ready`, `/api/transfers/assess`, `bedSensorEmitter.js`) and frontend (`ml_socket_client.js`).
+5. **`medbed-ml` fully integrated:** Trained all 3 experimental models (Transfer GradientBoosting+RF, Vitals BiLSTM+GB ensemble, Safety RF+GB). Running on port 8001 via FastAPI (`ML_SERVICE_URL=http://127.0.0.1:8001`). Wired into backend (`mlPredictionService.js`, `mlSocketBroadcaster.js`, `mlRoutes.js`, `/api/health/ready`, `/api/transfers/assess`, `bedSensorEmitter.js`) and frontend (`ml_socket_client.js`).
 6. **Python 3.13 incompatible with pinned AI stack.** NumPy 1.26.3 and
    TensorFlow 2.15.0 have no Python 3.13 wheels. Use Python 3.11 (verified).
 7. **macOS port 5000 conflict.** Control Center / AirPlay Receiver owns `:5000`.
@@ -982,7 +982,7 @@ Verification:
   commits or pushes were made. The original Care-Verse repository was not
   modified.
 
-### 11.7 Offline replay buffer, safety integration tests, and committed E2E suite (current task)
+### 11.7 Offline replay buffer, safety integration tests, and committed E2E suite (previous task)
 
 Changes made:
 
@@ -1009,11 +1009,36 @@ Changes made:
 
 Verification:
 
-- `npm test`: 34/34 unit and safety tests passed (duration ~490ms).
+- `npm test`: 34/34 unit and safety tests passed (duration ~490ms; the later ML
+  integration raised the suite to 39/39, see 11.8).
 - `npm run test:e2e`: 41/41 browser checks passed.
-- `npm run test:all`: 75/75 total automated checks passed.
+- `npm run test:all`: 75/75 total automated checks passed at the time.
 - All JS files passed `node --check`; AI Python files passed `py_compile`.
 - Readiness: `/api/health/ready` returns `ready` with MongoDB and AI both `up`.
+- No commits or pushes made; original Care-Verse untouched.
+
+### 11.8 ML integration verification and README refresh (current task)
+
+Changes made:
+
+- Rewrote the root `README.md` to describe the current Ward Zero slice instead
+  of the inherited Care-Verse marketing copy: accurate services/ports, startup
+  order, env variables, test commands, API/event summary, safety behavior, ML
+  integration, and explicit prototype limitations.
+- Updated `medbed-fullstack/README.md` test counts, ML-service startup step,
+  environment variables, and tech stack.
+- Updated `medbed-ml/README.md` to label the models experimental, mark the
+  performance tables as unmeasured illustrative targets, and correct the port to
+  8001.
+- Synchronized this file with the ML integration and committed model artefacts.
+
+Verification:
+
+- MongoDB Atlas, AI (`:8000`), and ML (`:8001`) readiness returned `ready` with
+  all three dependencies `up`.
+- `npm test`: 39/39 backend unit, safety, and ML contract tests passed.
+- `npm run test:e2e`: 41/41 browser checks passed.
+- Combined: 80/80 checks passed.
 - No commits or pushes made; original Care-Verse untouched.
 
 ---
@@ -1054,8 +1079,9 @@ docker run --rm -d --name wardzero-mongo -p 27017:27017 mongo:7
 
 ### 12.2 Node backend
 
-Start the AI service first (Section 12.3) if you want live AI assessments;
-otherwise the backend uses the clearly tagged rule fallback.
+Start the AI service (Section 12.3) if you want live AI assessments; otherwise
+the backend uses the clearly tagged rule fallback. Start the ML service on port
+8001 too if you want ML endpoints or the complete `npm test` suite.
 
 ```bash
 cd medbed-fullstack/backend
@@ -1083,8 +1109,10 @@ curl http://127.0.0.1:5001/index.html
 ```
 
 `/api/health` is liveness-only. `/api/health/ready` returns 503 while the
-required MongoDB connection is unavailable and reports AI status separately.
-Run the backend from `medbed-fullstack/backend`, not from the repository root.
+required MongoDB connection is unavailable and reports AI and ML status
+separately. Run the backend from `medbed-fullstack/backend`, not from the
+repository root. `npm test` includes ML contract tests, so start the ML service
+first if you want the complete suite to pass.
 
 ### 12.3 AI service
 
@@ -1140,10 +1168,10 @@ run a synthetic scenario, and acknowledge/dismiss the resulting alerts.
 |---|---|
 | Backend/frontend application JavaScript syntax (`node --check`) | Passed |
 | AI Python syntax (`python3.11 -m py_compile`) | Passed |
-| Backend unit & safety tests (`npm test`) | Passed: 34/34 (21 baseline + 6 replay buffer + 7 ingestion safety) |
+| Backend unit & safety tests (`npm test`) | Passed: 39/39 (includes 5 ML contract tests requiring the ML service) |
 | Browser E2E suite (`npm run test:e2e`) | Passed: 41/41 automated checks with Playwright Core + system Chrome |
-| Full test suite (`npm run test:all`) | Passed: 75/75 (34 backend + 41 browser E2E) |
-| MongoDB Atlas connection + readiness | Passed: `/api/health/ready` `ready`, MongoDB `up`, AI `up` |
+| Full test suite (`npm run test:all`) | Passed: 80/80 (39 backend + 41 browser E2E) |
+| MongoDB Atlas connection + readiness | Passed: `/api/health/ready` `ready`, MongoDB `up`, AI `up`, ML `up` |
 | Seed script | Passed: 3 synthetic users, 4 patients, baseline vitals |
 | Seeded login + `/api/auth/me` + `/api/patients` | Passed; 4 active patients with latest vitals/quality |
 | Vitals ingestion with AI | Passed; `source=ai`, assessment/explanation persisted |
