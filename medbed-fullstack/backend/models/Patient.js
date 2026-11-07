@@ -56,6 +56,20 @@ const patientSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: true },
 
     notes: { type: String, default: '' },
+
+    latestTrendPrediction: {
+      riskScore: { type: Number, default: null },
+      riskLevel: {
+        type: String,
+        enum: ['low', 'medium', 'high', 'insufficient_data'],
+        default: 'insufficient_data',
+      },
+      horizonHours: { type: Number, default: 48 },
+      topContributingFactors: [{ type: String }],
+      confidence: { type: Number, default: 0 },
+      source: { type: String, enum: ['ml', 'rule'], default: 'rule' },
+      assessedAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

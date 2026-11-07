@@ -3,6 +3,7 @@ const { body } = require('express-validator');
 const {
   getAllPatients, getPatient, createPatient,
   updatePatient, deletePatient, recordVitals, getVitals,
+  getTrendPrediction,
 } = require('../controllers/patientController');
 const { runScenario } = require('../controllers/simulationController');
 const { protect, authorize } = require('../middleware/auth');
@@ -72,6 +73,8 @@ router.route('/:id')
 router.route('/:id/vitals')
   .get(getVitals)
   .post(vitalsRules, validate, recordVitals);
+
+router.get('/:id/trend', getTrendPrediction);
 
 router.post(
   '/:id/simulate',

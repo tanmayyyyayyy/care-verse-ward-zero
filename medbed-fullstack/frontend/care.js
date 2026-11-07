@@ -86,11 +86,16 @@
     if (!state.selectedId) {
       state.care = null;
       state.notes = [];
+      state.trend = null;
       return;
     }
-    const res = await apiFetch(`/api/care/patients/${state.selectedId}/intelligence`);
+    const [res, trendRes] = await Promise.all([
+      apiFetch(`/api/care/patients/${state.selectedId}/intelligence`).catch(() => ({ data: null, notes: [] })),
+      apiFetch(`/api/patients/${state.selectedId}/trend`).catch(() => ({ data: null })),
+    ]);
     state.care = res.data;
     state.notes = res.notes || [];
+    state.trend = trendRes.data || null;
   };
 
   const refresh = async () => {
@@ -574,6 +579,7 @@
     renderCare();
     renderCaregivers();
     renderDashboardCaregiverWidget();
+    renderDashboardTrendWidget();
   };
 
   const scheduleRefresh = (delay = 300) => {
@@ -591,6 +597,12 @@
         if (PAGES.includes(activePage())) renderCare();
       }
       if (PAGES.includes(activePage()) || activePage() === 'dashboard') scheduleRefresh(800);
+    });
+    sock.on('trend:prediction', (payload) => {
+      if (payload && String(payload.patientId) === String(state.selectedId)) {
+        state.trend = payload.trend;
+        renderDashboardTrendWidget();
+      }
     });
     sock.on('gateway:status', (status) => {
       state.gateway = status;
@@ -681,6 +693,93 @@
           await refresh();
         } catch (err) {
           toast(err.message || 'Check-out failed', true);
+        }
+      };
+    }
+  };
+
+  const renderDashboardTrendWidget = () => {
+    const dash = document.getElementById('page-dashboard');
+    if (!dash) return;
+    let card = document.getElementById('wzDashTrendCard');
+    if (!card) {
+      const col3 = dash.querySelectorAll('.dash-col')[2];
+      if (col3) {
+        card = document.createElement('div');
+        card.id = 'wzDashTrendCard';
+        card.className = 'card';
+        const caregiverCard = document.getElementById('wzDashCaregiverCard');
+        if (caregiverCard && caregiverCard.nextSibling) {
+          col3.insertBefore(card, caregiverCard.nextSibling);
+        } else {
+          col3.appendChild(card);
+        }
+      }
+    }
+    if (!card) return;
+
+    const t = state.trend;
+    if (!t) {
+      card.innerHTML = `
+        <div class="ch">
+          <span class="ct">24–48h Deterioration Forecast</span>
+          <span class="cb" style="background:var(--yellow-bg);color:var(--yellow);font-size:9px;">Experimental — synthetic data</span>
+        </div>
+        <div style="font-size:11px;color:var(--gray-500);padding:8px 0;">Evaluating multi-hour vital trends...</div>
+      `;
+      return;
+    }
+
+    const isInsufficient = t.riskLevel === 'insufficient_data';
+    const isHigh = t.riskLevel === 'high';
+    const isMed = t.riskLevel === 'medium';
+    const badgeColor = isInsufficient ? 'var(--yellow-bg);color:var(--yellow);' : isHigh ? 'var(--red-bg);color:var(--red);' : isMed ? 'var(--yellow-bg);color:var(--yellow);' : 'var(--green-bg);color:var(--green);';
+    const badgeText = isInsufficient ? 'INSUFFICIENT DATA' : isHigh ? 'HIGH DETERIORATION RISK' : isMed ? 'MODERATE TREND RISK' : 'LOW TREND RISK';
+
+    const factorsHTML = (t.topContributingFactors || [])
+      .map((f) => `<li style="margin-bottom:3px;">${esc(f)}</li>`)
+      .join('');
+
+    card.innerHTML = `
+      <div class="ch" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+        <div>
+          <span class="ct">24–48h Deterioration Forecast</span>
+          <div style="font-size:9px;color:var(--gray-500);margin-top:2px;">Horizon: 24–48 hours forward</div>
+        </div>
+        <span class="cb" style="background:var(--yellow-bg);color:var(--yellow);font-size:9px;white-space:nowrap;">Experimental — synthetic data</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 8px 0;">
+        <span class="status-pill" style="background:${badgeColor};font-weight:700;font-size:11px;padding:3px 8px;border-radius:12px;">${badgeText}</span>
+        <span style="font-size:10px;color:var(--gray-500);font-family:'JetBrains Mono',monospace;">
+          ${t.riskScore !== null && t.riskScore !== undefined ? `Score: ${(t.riskScore * 100).toFixed(0)}/100 · ` : ''}${esc(String(t.source || 'ml').toUpperCase())} (${((t.confidence || 0) * 100).toFixed(0)}%)
+        </span>
+      </div>
+      ${isInsufficient ? `
+        <div style="background:var(--yellow-bg);border:1px solid rgba(245,158,11,0.25);border-radius:6px;padding:8px;font-size:11px;color:#92400e;line-height:1.4;margin-bottom:8px;">
+          ⚠ <b>Insufficient Continuous Data:</b> At least 5 continuous readings are required to project multi-hour trajectory. <i>Never assume missing sensor data means low risk.</i>
+        </div>
+      ` : `
+        <div style="font-size:11px;font-weight:600;color:var(--gray-700);margin-bottom:4px;">Top Contributing Drivers:</div>
+        <ul style="font-size:10px;color:var(--gray-600);margin:0 0 10px 16px;padding:0;line-height:1.4;">
+          ${factorsHTML || '<li>Vitals steady within normal physiological baseline</li>'}
+        </ul>
+      `}
+      <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--gray-100);padding-top:6px;margin-top:6px;">
+        <span style="font-size:9px;color:var(--gray-400);">Source: ${t.source === 'ml' ? 'GradientBoosting model' : 'Rule fallback engine'}</span>
+        <button class="wz-btn ghost" id="wzRefreshTrend" type="button" style="padding:2px 8px;font-size:10px;">↻ Refresh</button>
+      </div>
+    `;
+
+    const refreshBtn = card.querySelector('#wzRefreshTrend');
+    if (refreshBtn) {
+      refreshBtn.onclick = async () => {
+        refreshBtn.textContent = '...';
+        try {
+          const r = await apiFetch(`/api/patients/${state.selectedId}/trend`);
+          state.trend = r.data;
+          renderDashboardTrendWidget();
+        } catch (e) {
+          toast(e.message, true);
         }
       };
     }

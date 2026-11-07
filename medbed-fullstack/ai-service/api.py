@@ -5,10 +5,11 @@
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, validator
-from typing import Optional
+from typing import Optional, List, Dict, Any
 import traceback
 
 from model import predict, suggest_route
+from trend_inference import predict_trend
 
 app = FastAPI(
     title="MedBed OS — AI Risk Service",
@@ -55,6 +56,34 @@ class RouteResponse(BaseModel):
     avoid:             Optional[str]
 
 
+class TrendReadingItem(BaseModel):
+    timestamp:        Optional[str]   = None
+    t_hours:          Optional[float] = None
+    heart_rate:       int             = Field(..., ge=20, le=250)
+    spo2:             int             = Field(..., ge=40, le=100)
+    bp_systolic:      int             = Field(..., ge=40, le=260)
+    bp_diastolic:     Optional[int]   = Field(None, ge=20, le=160)
+    respiratory_rate: Optional[int]   = Field(16, ge=4, le=60)
+    temperature:      Optional[float] = Field(37.0, ge=30.0, le=45.0)
+
+
+class TrendInput(BaseModel):
+    readings:         List[TrendReadingItem]
+    baseline:         Optional[Dict[str, float]] = None
+    patient_context:  Optional[Dict[str, Any]]   = None
+    horizon_hours:    Optional[int]              = 48
+
+
+class TrendResponse(BaseModel):
+    risk_score:               Optional[float]
+    risk_level:               str
+    horizon_hours:            int
+    top_contributing_factors: List[str]
+    confidence:               float
+    source:                   str
+    safety_notice:            str
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/")
@@ -97,6 +126,26 @@ def get_route(data: RouteInput):
     """
     try:
         result = suggest_route(data.from_ward, data.to_ward)
+        return result
+    except Exception:
+        raise HTTPException(status_code=500, detail=traceback.format_exc())
+
+
+@app.post("/predict/trend", response_model=TrendResponse)
+def predict_trend_endpoint(data: TrendInput):
+    """
+    Accepts time-ordered window of vitals readings (up to 48h) and returns
+    projected deterioration risk, confidence, source, and ranked human-readable factors.
+    Returns 'insufficient_data' if fewer than 5 continuous readings or stale.
+    """
+    try:
+        readings_dicts = [r.dict() for r in data.readings]
+        result = predict_trend(
+            readings        = readings_dicts,
+            baseline        = data.baseline,
+            patient_context = data.patient_context,
+            horizon_hours   = data.horizon_hours or 48,
+        )
         return result
     except Exception:
         raise HTTPException(status_code=500, detail=traceback.format_exc())

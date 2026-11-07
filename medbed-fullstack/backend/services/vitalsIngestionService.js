@@ -11,6 +11,7 @@ const {
 const { assessVitalsQuality } = require('./vitalsQuality');
 const { recordAudit } = require('./auditService');
 const { getPatientCare, syncForecastAlert, emitCareUpdate } = require('./careService');
+const { assessAndSyncPatientTrend } = require('./trendPredictionService');
 
 const toDateOrNull = (value) => {
   if (!value) return null;
@@ -199,6 +200,15 @@ const ingestVitals = async ({ patient, payload, io = null, actor = null }) => {
       }
     } catch (error) {
       console.warn('[care] forecast/context step failed:', error.message);
+    }
+
+    try {
+      const trendResult = await assessAndSyncPatientTrend({ patient, io, actor });
+      if (trendResult?.alerts?.length) {
+        alerts.push(...trendResult.alerts);
+      }
+    } catch (err) {
+      console.warn('[trend] trend prediction step failed:', err.message);
     }
   }
 

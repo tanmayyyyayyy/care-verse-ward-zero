@@ -219,3 +219,29 @@ exports.getVitals = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.getTrendPrediction = async (req, res, next) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+    if (!patient || !patient.isActive) {
+      return next(new AppError('Active patient not found', 404));
+    }
+
+    const { assessAndSyncPatientTrend } = require('../services/trendPredictionService');
+    const result = await assessAndSyncPatientTrend({
+      patient,
+      io: req.app.get('io'),
+      actor: req.user,
+    });
+
+    res.status(200).json({
+      success: true,
+      patientId: patient._id,
+      patientCode: patient.patientId,
+      data: result?.prediction || null,
+      latestTrendPrediction: patient.latestTrendPrediction || null,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
