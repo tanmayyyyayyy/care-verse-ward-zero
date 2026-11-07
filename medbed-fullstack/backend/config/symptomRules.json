@@ -1,0 +1,210 @@
+{
+  "version": "1.0.0",
+  "description": "Configurable symptom keyword extraction rules for caregiver notes with transparent phrase matching and negation support.",
+  "negationPrefixes": [
+    "no",
+    "not",
+    "denies",
+    "denied",
+    "without",
+    "free of",
+    "negative for",
+    "rules out"
+  ],
+  "rules": [
+    {
+      "id": "confusion",
+      "label": "New confusion / altered consciousness",
+      "level": "urgent",
+      "altersConsciousness": true,
+      "negatable": true,
+      "keywords": [
+        "confused",
+        "confusion",
+        "disoriented",
+        "disorientation",
+        "drowsy",
+        "unresponsive",
+        "hard to wake",
+        "difficult to wake",
+        "not making sense",
+        "slurred speech",
+        "delirious",
+        "incoherent"
+      ]
+    },
+    {
+      "id": "breathing_difficulty",
+      "label": "Breathlessness / respiratory distress",
+      "level": "urgent",
+      "altersConsciousness": false,
+      "negatable": true,
+      "keywords": [
+        "short of breath",
+        "shortness of breath",
+        "breathless",
+        "breathlessness",
+        "struggling to breathe",
+        "difficulty breathing",
+        "trouble breathing",
+        "gasping",
+        "wheezing",
+        "laboured breathing",
+        "labored breathing",
+        "blue lips"
+      ]
+    },
+    {
+      "id": "fall",
+      "label": "Fall reported",
+      "level": "urgent",
+      "altersConsciousness": false,
+      "negatable": true,
+      "keywords": [
+        "fell",
+        "had a fall",
+        "a fall",
+        "slipped",
+        "found on the floor",
+        "found on floor",
+        "collapsed"
+      ]
+    },
+    {
+      "id": "chest_pain",
+      "label": "Chest pain / cardiac distress",
+      "level": "urgent",
+      "altersConsciousness": false,
+      "negatable": true,
+      "keywords": [
+        "chest pain",
+        "chest pressure",
+        "chest tightness",
+        "chest discomfort"
+      ]
+    },
+    {
+      "id": "bleeding",
+      "label": "Acute bleeding",
+      "level": "urgent",
+      "altersConsciousness": false,
+      "negatable": true,
+      "keywords": [
+        "bleeding",
+        "blood in stool",
+        "blood in urine",
+        "blood in vomit",
+        "nosebleed",
+        "hemorrhage"
+      ]
+    },
+    {
+      "id": "dizziness",
+      "label": "Dizziness / lightheadedness",
+      "level": "elevated",
+      "altersConsciousness": false,
+      "negatable": true,
+      "keywords": [
+        "dizzy",
+        "dizziness",
+        "lightheaded",
+        "light-headed",
+        "faint",
+        "fainting",
+        "blacked out",
+        "vertigo"
+      ]
+    },
+    {
+      "id": "vomiting",
+      "label": "Vomiting / gastrointestinal loss",
+      "level": "elevated",
+      "altersConsciousness": false,
+      "negatable": true,
+      "keywords": [
+        "vomiting",
+        "vomited",
+        "nausea",
+        "nauseous",
+        "diarrhea",
+        "diarrhoea",
+        "loose stool"
+      ]
+    },
+    {
+      "id": "pain_worse",
+      "label": "Worsening pain",
+      "level": "elevated",
+      "altersConsciousness": false,
+      "negatable": true,
+      "keywords": [
+        "severe pain",
+        "worsening pain",
+        "pain is worse",
+        "pain worsening",
+        "pain increasing",
+        "unbearable pain"
+      ]
+    },
+    {
+      "id": "reduced_intake",
+      "label": "Reduced food / fluid intake",
+      "level": "watch",
+      "altersConsciousness": false,
+      "negatable": false,
+      "keywords": [
+        "reduced intake",
+        "poor intake",
+        "not eating",
+        "poor appetite",
+        "no appetite",
+        "refused food",
+        "refusing food",
+        "refused meals",
+        "not drinking",
+        "barely drinking",
+        "poor fluid intake",
+        "dehydrated"
+      ]
+    },
+    {
+      "id": "missed_medication",
+      "label": "Missed / refused medication",
+      "level": "watch",
+      "altersConsciousness": false,
+      "negatable": false,
+      "keywords": [
+        "missed medication",
+        "missed morning medication",
+        "missed evening medication",
+        "missed medicine",
+        "missed dose",
+        "skipped medication",
+        "skipped morning medication",
+        "skipped dose",
+        "forgot medication",
+        "forgot dose",
+        "refused medication",
+        "refused dose",
+        "refusing medicine",
+        "missed insulin",
+        "missed inhaler"
+      ]
+    },
+    {
+      "id": "swelling",
+      "label": "New edema / swelling",
+      "level": "watch",
+      "altersConsciousness": false,
+      "negatable": true,
+      "keywords": [
+        "swollen",
+        "swelling",
+        "edema",
+        "oedema",
+        "puffy legs",
+        "swollen feet"
+      ]
+    }
+  ]
+}

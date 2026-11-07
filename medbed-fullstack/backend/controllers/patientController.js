@@ -245,3 +245,63 @@ exports.getTrendPrediction = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.getPatientNotes = async (req, res, next) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+    if (!patient || !patient.isActive) {
+      return next(new AppError('Active patient not found', 404));
+    }
+    const Note = require('../models/Note');
+    const notes = await Note.find({ patient: patient._id }).sort({ createdAt: -1 }).limit(100);
+    res.status(200).json({
+      success: true,
+      count: notes.length,
+      data: notes,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.createPatientNote = async (req, res, next) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+    if (!patient || !patient.isActive) {
+      return next(new AppError('Active patient not found', 404));
+    }
+
+    const text = String(req.body.text || '').trim();
+    if (!text) {
+      return next(new AppError('Note text is required and cannot be empty.', 400));
+    }
+
+    const { addCareNote } = require('../services/careService');
+    const result = await addCareNote({
+      patient,
+      user: req.user,
+      text,
+      io: req.app.get('io'),
+    });
+
+    const { assessAndSyncPatientTrend } = require('../services/trendPredictionService');
+    const trendRes = await assessAndSyncPatientTrend({
+      patient,
+      io: req.app.get('io'),
+      actor: req.user,
+    }).catch((e) => {
+      console.warn('[note] trend sync warning:', e.message);
+      return null;
+    });
+
+    res.status(201).json({
+      success: true,
+      data: result.note,
+      extractedFlags: result.note.flags,
+      trend: trendRes?.prediction || null,
+      alertsCreated: (result.alerts ? result.alerts.length : 0) + (trendRes?.alerts ? trendRes.alerts.length : 0),
+    });
+  } catch (error) {
+    next(error);
+  }
+};

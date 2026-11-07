@@ -13,9 +13,42 @@
  * It is a heuristic aid for a prototype, not clinical language understanding.
  */
 
+const path = require('path');
+const fs = require('fs');
+
 const LEVELS = Object.freeze({ info: 0, watch: 1, elevated: 2, urgent: 3 });
 
-const RULES = Object.freeze([
+let loadedRules = null;
+try {
+  const cfgPath = path.join(__dirname, '../config/symptomRules.json');
+  if (fs.existsSync(cfgPath)) {
+    const raw = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    if (Array.isArray(raw.rules) && raw.rules.length > 0) {
+      loadedRules = raw.rules.map((r) => {
+        const joined = (r.keywords || []).map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+        return {
+          id: r.id,
+          label: r.label,
+          level: r.level,
+          altersConsciousness: Boolean(r.altersConsciousness),
+          negatable: Boolean(r.negatable),
+          pattern: new RegExp(`\\b(${joined})\\b`, 'i'),
+        };
+      });
+      loadedRules.push({
+        id: 'reassuring',
+        label: 'Reassuring note (does not lower risk)',
+        level: 'info',
+        negatable: false,
+        pattern: /\b(feeling (?:better|good|well|fine)|comfortable|slept well|ate well|eating well|good appetite|no complaints)\b/i,
+      });
+    }
+  }
+} catch (e) {
+  // Fall back to built-in static rules below
+}
+
+const DEFAULT_RULES = Object.freeze([
   {
     id: 'confusion',
     label: 'New confusion / drowsiness',
@@ -108,6 +141,8 @@ const RULES = Object.freeze([
   },
 ]);
 
+const RULES = Object.freeze(loadedRules || DEFAULT_RULES);
+
 const NEGATORS = /\b(no|not|never|denies|denied|without|negative for|free of|nil|absence of)\b[^.;,!?]{0,28}$/i;
 
 const isNegated = (text, matchIndex) => {
@@ -135,6 +170,7 @@ const analyzeNote = (text) => {
         level: rule.level,
         phrase: match[0],
         altersConsciousness: Boolean(rule.altersConsciousness),
+        extractor: 'rule',
       });
       break; // one hit per rule per note is enough for explanation
     }

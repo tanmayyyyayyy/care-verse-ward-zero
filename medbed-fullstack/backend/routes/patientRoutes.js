@@ -3,7 +3,7 @@ const { body } = require('express-validator');
 const {
   getAllPatients, getPatient, createPatient,
   updatePatient, deletePatient, recordVitals, getVitals,
-  getTrendPrediction,
+  getTrendPrediction, getPatientNotes, createPatientNote,
 } = require('../controllers/patientController');
 const { runScenario } = require('../controllers/simulationController');
 const { protect, authorize } = require('../middleware/auth');
@@ -75,6 +75,14 @@ router.route('/:id/vitals')
   .post(vitalsRules, validate, recordVitals);
 
 router.get('/:id/trend', getTrendPrediction);
+
+router.route('/:id/notes')
+  .get(getPatientNotes)
+  .post(
+    body('text').isString().trim().isLength({ min: 1, max: 2000 }).withMessage('Note text is required (1-2000 characters).'),
+    validate,
+    createPatientNote
+  );
 
 router.post(
   '/:id/simulate',

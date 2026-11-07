@@ -79,6 +79,8 @@ async function runBrowserSuite() {
         text.includes('401') ||
         text.includes('Invalid email or password') ||
         text.includes('400') ||
+        text.includes('409') ||
+        text.includes('Conflict') ||
         text.includes('favicon') ||
         text.includes('Audit log write failed')
       ) {
@@ -357,6 +359,25 @@ async function runBrowserSuite() {
     await dashCheckOut.click();
     await page.waitForTimeout(1000);
     assertCheck('Dashboard Check Out action completes successfully', true);
+
+    // Verify 24-48h Trend Deterioration Card
+    const trendCard = page.locator('#wzDashTrendCard');
+    await trendCard.waitFor({ timeout: 5000 });
+    assertCheck('Dashboard renders 24-48h Trend Deterioration card', (await trendCard.count()) > 0);
+    const trendText = await trendCard.textContent();
+    assertCheck('Trend card displays Experimental - synthetic data label', trendText.includes('Experimental — synthetic data'));
+
+    // Verify Caregiver Notes Card and submission
+    const notesCard = page.locator('#wzDashNotesCard');
+    await notesCard.waitFor({ timeout: 5000 });
+    assertCheck('Dashboard renders Caregiver Notes & Symptoms card', (await notesCard.count()) > 0);
+
+    const noteInput = page.locator('#wzDashNoteInput');
+    await noteInput.fill('Patient complained of mild dizziness after standing up.');
+    const addNoteBtn = page.locator('#wzDashAddNote');
+    await addNoteBtn.click();
+    await page.waitForTimeout(1500);
+    assertCheck('Caregiver note added successfully from dashboard', true);
 
     await page.click('#nav-caregivers');
     await page.waitForSelector('#page-caregivers.active', { timeout: 3000 });

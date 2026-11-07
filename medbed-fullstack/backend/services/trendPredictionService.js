@@ -3,9 +3,11 @@
 const axios = require('axios');
 const Patient = require('../models/Patient');
 const Vitals = require('../models/Vitals');
+const Note = require('../models/Note');
 const { createAlert, buildDedupKey, resolveAlertsByType } = require('./alertService');
 const { assessVitalsQuality } = require('./vitalsQuality');
 const { computeEarlyWarning } = require('./earlyWarning');
+const { summarizeContext, LEVELS } = require('./noteContext');
 
 const DEFAULT_AI_URL = process.env.AI_SERVICE_URL || 'http://127.0.0.1:8000';
 const DEFAULT_TIMEOUT_MS = 3000;
@@ -259,6 +261,78 @@ const assessAndSyncPatientTrend = async ({ patient, io = null, actor = null }) =
     baseline,
     patientContext,
   });
+
+  // Feature 3: Contextual Intelligence - Feed Note Flags & Patient History
+  const recentNotes = await Note.find({
+    patient: patient._id,
+    createdAt: { $gte: new Date(Date.now() - 24 * 3600 * 1000) },
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const context = summarizeContext(recentNotes);
+
+  // 1. Tag Vitals Factors
+  const vitalsFactors = (prediction.topContributingFactors || []).map((f) =>
+    f.startsWith('[') ? f : `[Vitals] ${f}`
+  );
+
+  // 2. Tag Patient History Factors
+  const historyFactors = [];
+  if (Number(patient.age) >= 65) historyFactors.push(`[History] Age ${patient.age} (65+)`);
+  if (patient.isPostSurgery) historyFactors.push('[History] Recent post-surgical recovery');
+  if (['cardiac', 'respiratory', 'icu'].includes(patient.condition)) {
+    historyFactors.push(`[History] High-risk clinical condition: ${patient.condition}`);
+  }
+
+  // 3. Tag Caregiver Note Factors & Recency
+  const noteFactors = [];
+  const nowMs = Date.now();
+  const concerningFlags = (context.flags || []).filter((f) => f.level !== 'info');
+
+  for (const flag of concerningFlags) {
+    const hoursAgo = Math.max(0.1, (nowMs - (flag.at || nowMs)) / 3600000).toFixed(1);
+    noteFactors.push(
+      `[Caregiver Note] ${flag.label} ("${flag.phrase}") reported ${hoursAgo}h ago`
+    );
+  }
+
+  // 4. Enforce Contextual Risk Floor (Notes can ONLY raise attention/risk, NEVER lower or clear it)
+  let contextRaised = false;
+  let raisedReason = '';
+
+  if (prediction.riskLevel !== 'insufficient_data') {
+    if (context.level === 'urgent') {
+      if (prediction.riskLevel !== 'high') {
+        const prevLevel = prediction.riskLevel;
+        prediction.riskLevel = 'high';
+        prediction.riskScore = Math.max(prediction.riskScore || 0, 0.88);
+        contextRaised = true;
+        raisedReason = `Risk raised from ${prevLevel} to high: caregiver note reported urgent symptom(s) (${concerningFlags.map((f) => f.phrase).join(', ')})`;
+      }
+    } else if (context.level === 'elevated' || concerningFlags.length >= 2) {
+      if (prediction.riskLevel === 'low') {
+        prediction.riskLevel = 'medium';
+        prediction.riskScore = Math.max(prediction.riskScore || 0, 0.55);
+        contextRaised = true;
+        raisedReason = `Risk raised from low to medium: caregiver note reported elevated symptom(s) (${concerningFlags.map((f) => f.phrase).join(', ')})`;
+      }
+    }
+  }
+
+  // 5. Structure top factors with explicit attribution
+  const combinedFactors = [...vitalsFactors, ...noteFactors, ...historyFactors];
+  if (raisedReason) {
+    combinedFactors.unshift(`[Context] ${raisedReason}`);
+  }
+
+  prediction.topContributingFactors = combinedFactors;
+  prediction.factorsBySource = {
+    vitals: vitalsFactors,
+    notes: noteFactors,
+    history: historyFactors,
+  };
+  prediction.contextRaised = contextRaised;
 
   const assessedAt = new Date();
   const updateDoc = {

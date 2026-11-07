@@ -149,9 +149,13 @@ const hospitalSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const CareNote = require('./CareNote');
+
 module.exports = {
   Approval: mongoose.model('Approval', approvalSchema),
   Alert:    mongoose.model('Alert',    alertSchema),
   Hospital: mongoose.model('Hospital', hospitalSchema),
   AuditLog: mongoose.model('AuditLog', auditLogSchema),
+  CareNote,
+  Note:     CareNote,
 };

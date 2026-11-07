@@ -24,6 +24,7 @@ const careNoteSchema = new mongoose.Schema(
           label: String,
           level: String,
           phrase: String,
+          extractor: { type: String, default: 'rule' },
         },
       ],
       default: [],

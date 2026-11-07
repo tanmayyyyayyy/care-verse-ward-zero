@@ -580,6 +580,7 @@
     renderCaregivers();
     renderDashboardCaregiverWidget();
     renderDashboardTrendWidget();
+    renderDashboardNotesWidget();
   };
 
   const scheduleRefresh = (delay = 300) => {
@@ -618,6 +619,7 @@
       toast(`Caregiver ${data?.caregiver?.name || ''} checked out`, false);
       scheduleRefresh(200);
     });
+    sock.on('note:new', () => scheduleRefresh(200));
     ['alert:new', 'alert:resolved', 'alert:acknowledged', 'alert:escalated'].forEach((evt) => sock.on(evt, () => scheduleRefresh(800)));
     hookSocket.done = true;
     return true;
@@ -736,9 +738,13 @@
     const badgeColor = isInsufficient ? 'var(--yellow-bg);color:var(--yellow);' : isHigh ? 'var(--red-bg);color:var(--red);' : isMed ? 'var(--yellow-bg);color:var(--yellow);' : 'var(--green-bg);color:var(--green);';
     const badgeText = isInsufficient ? 'INSUFFICIENT DATA' : isHigh ? 'HIGH DETERIORATION RISK' : isMed ? 'MODERATE TREND RISK' : 'LOW TREND RISK';
 
-    const factorsHTML = (t.topContributingFactors || [])
-      .map((f) => `<li style="margin-bottom:3px;">${esc(f)}</li>`)
-      .join('');
+    // Separate factors into vitals, notes, history, context
+    const allFactors = t.topContributingFactors || [];
+    const contextFactors = allFactors.filter((f) => f.includes('[Context]')).map((f) => f.replace('[Context] ', ''));
+    const vitalsFactors = allFactors.filter((f) => f.includes('[Vitals]')).map((f) => f.replace('[Vitals] ', ''));
+    const notesFactors = allFactors.filter((f) => f.includes('[Caregiver Note]')).map((f) => f.replace('[Caregiver Note] ', ''));
+    const historyFactors = allFactors.filter((f) => f.includes('[History]')).map((f) => f.replace('[History] ', ''));
+    const rawFactors = allFactors.filter((f) => !f.startsWith('['));
 
     card.innerHTML = `
       <div class="ch" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
@@ -759,10 +765,41 @@
           ⚠ <b>Insufficient Continuous Data:</b> At least 5 continuous readings are required to project multi-hour trajectory. <i>Never assume missing sensor data means low risk.</i>
         </div>
       ` : `
-        <div style="font-size:11px;font-weight:600;color:var(--gray-700);margin-bottom:4px;">Top Contributing Drivers:</div>
-        <ul style="font-size:10px;color:var(--gray-600);margin:0 0 10px 16px;padding:0;line-height:1.4;">
-          ${factorsHTML || '<li>Vitals steady within normal physiological baseline</li>'}
-        </ul>
+        ${contextFactors.length ? `
+          <div style="background:var(--red-bg);border-left:3px solid var(--red);padding:6px 8px;font-size:10px;color:var(--red);margin-bottom:8px;border-radius:4px;">
+            ⚡ <b>Context Escalation:</b> ${esc(contextFactors.join('; '))}
+          </div>
+        ` : ''}
+        <div style="display:flex;flex-direction:column;gap:6px;font-size:10px;line-height:1.4;margin-bottom:8px;">
+          <div>
+            <div style="font-weight:700;color:var(--gray-700);display:flex;align-items:center;gap:4px;margin-bottom:2px;">
+              <span>🩺</span> <span>Vitals Dynamics:</span>
+            </div>
+            <ul style="margin:0 0 0 16px;padding:0;color:var(--gray-600);">
+              ${(vitalsFactors.length ? vitalsFactors : rawFactors).map((f) => `<li>${esc(f)}</li>`).join('') || '<li>Vitals within baseline limits</li>'}
+            </ul>
+          </div>
+          ${notesFactors.length ? `
+            <div>
+              <div style="font-weight:700;color:var(--blue-700);display:flex;align-items:center;gap:4px;margin-bottom:2px;">
+                <span>📝</span> <span>Caregiver Note Flags:</span>
+              </div>
+              <ul style="margin:0 0 0 16px;padding:0;color:var(--blue-900);">
+                ${notesFactors.map((f) => `<li>${esc(f)}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+          ${historyFactors.length ? `
+            <div>
+              <div style="font-weight:700;color:var(--gray-600);display:flex;align-items:center;gap:4px;margin-bottom:2px;">
+                <span>📋</span> <span>Patient Baseline Context:</span>
+              </div>
+              <ul style="margin:0 0 0 16px;padding:0;color:var(--gray-500);">
+                ${historyFactors.map((f) => `<li>${esc(f)}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+        </div>
       `}
       <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--gray-100);padding-top:6px;margin-top:6px;">
         <span style="font-size:9px;color:var(--gray-400);">Source: ${t.source === 'ml' ? 'GradientBoosting model' : 'Rule fallback engine'}</span>
@@ -780,6 +817,98 @@
           renderDashboardTrendWidget();
         } catch (e) {
           toast(e.message, true);
+        }
+      };
+    }
+  };
+
+  const renderDashboardNotesWidget = () => {
+    const dash = document.getElementById('page-dashboard');
+    if (!dash) return;
+    let card = document.getElementById('wzDashNotesCard');
+    if (!card) {
+      const col3 = dash.querySelectorAll('.dash-col')[2];
+      if (col3) {
+        card = document.createElement('div');
+        card.id = 'wzDashNotesCard';
+        card.className = 'card';
+        const trendCard = document.getElementById('wzDashTrendCard');
+        if (trendCard && trendCard.nextSibling) {
+          col3.insertBefore(card, trendCard.nextSibling);
+        } else {
+          col3.appendChild(card);
+        }
+      }
+    }
+    if (!card) return;
+
+    const notes = state.notes || [];
+    const notesHTML = notes.length
+      ? notes
+          .slice(0, 5)
+          .map((n) => {
+            const timeAgo = ago(n.createdAt);
+            const flagChips = (n.flags || [])
+              .map(
+                (f) =>
+                  `<span class="cb ${f.level === 'urgent' ? 'cb-red' : f.level === 'elevated' ? 'cb-yellow' : 'cb-blue'}" style="font-size:8px;padding:1px 5px;" title="Extracted via ${f.extractor || 'rule'} matcher">${esc(f.label)}: "${esc(f.phrase)}"</span>`
+              )
+              .join(' ');
+
+            return `
+              <div style="padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:11px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+                  <b>${esc(n.authorName || 'Caregiver')}</b>
+                  <span style="font-size:9px;color:var(--gray-400);">${timeAgo}</span>
+                </div>
+                <div style="color:var(--gray-700);margin-bottom:3px;font-style:italic;">"${esc(n.text)}"</div>
+                ${flagChips ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${flagChips}</div>` : '<div style="font-size:9px;color:var(--gray-400);">No acute symptoms detected</div>'}
+              </div>
+            `;
+          })
+          .join('')
+      : '<div style="font-size:11px;color:var(--gray-400);padding:8px 0;">No caregiver notes logged yet for this patient.</div>';
+
+    card.innerHTML = `
+      <div class="ch" style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="ct">Caregiver Notes & Symptoms</span>
+        <span class="cb cb-teal" style="font-size:9px;" title="Configurable symptom dictionary">Rule Extractor</span>
+      </div>
+      <div style="margin-bottom:8px;">
+        <textarea id="wzDashNoteInput" placeholder="Enter observation (e.g., patient complains of dizziness, took sips of water, no chest pain)..." rows="2" style="width:100%;box-sizing:border-box;border:1px solid var(--gray-200);border-radius:6px;padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;"></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+          <span style="font-size:9px;color:var(--gray-400);">Notes can raise risk, never lower it.</span>
+          <button class="wz-btn ok" id="wzDashAddNote" type="button" style="padding:3px 10px;font-size:11px;">+ Add Note</button>
+        </div>
+      </div>
+      <div style="font-size:11px;font-weight:600;color:var(--gray-700);margin-bottom:4px;border-top:1px solid var(--gray-100);padding-top:6px;">Timeline:</div>
+      <div id="wzDashNotesTimeline" style="max-height:160px;overflow-y:auto;">
+        ${notesHTML}
+      </div>
+    `;
+
+    const addBtn = card.querySelector('#wzDashAddNote');
+    const input = card.querySelector('#wzDashNoteInput');
+    if (addBtn && input) {
+      addBtn.onclick = async () => {
+        const text = input.value.trim();
+        if (!text) {
+          toast('Please enter note text', true);
+          return;
+        }
+        addBtn.disabled = true;
+        addBtn.textContent = 'Saving...';
+        try {
+          const res = await post(`/api/patients/${state.selectedId}/notes`, { text });
+          input.value = '';
+          const flagsCount = res.extractedFlags?.length || 0;
+          toast(`Note saved. ${flagsCount} symptom flag(s) extracted.`);
+          await refresh();
+        } catch (err) {
+          toast(err.message || 'Failed to save note', true);
+        } finally {
+          addBtn.disabled = false;
+          addBtn.textContent = '+ Add Note';
         }
       };
     }
