@@ -1,0 +1,35 @@
+# One-command demo:  docker compose up --build   →  http://localhost:5001/login.html
+# Demo logins (synthetic): doctor@careverse.com / nurse@careverse.com / caregiver@careverse.com / admin@careverse.com
+# Password: WardZero!2026
+services:
+  mongo:
+    image: mongo:7
+    volumes: [mongo-data:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  ai:
+    build: ./medbed-fullstack/ai-service
+
+  backend:
+    build:
+      context: ./medbed-fullstack
+      dockerfile: backend/Dockerfile
+    ports: ["5001:5001"]
+    depends_on:
+      mongo: { condition: service_healthy }
+      ai: { condition: service_started }
+    environment:
+      MONGO_URI: mongodb://mongo:27017/medbed_os
+      JWT_SECRET: ${JWT_SECRET:-ward-zero-demo-secret-change-before-any-real-use-0123456789}
+      AI_SERVICE_URL: http://ai:8000
+      CLIENT_ORIGINS: http://localhost:5001,http://127.0.0.1:5001
+      # Faster stale/offline detection makes the connectivity demo quicker to show
+      VITALS_STALE_SECONDS: ${VITALS_STALE_SECONDS:-30}
+      SENSOR_OFFLINE_SECONDS: ${SENSOR_OFFLINE_SECONDS:-90}
+
+volumes:
+  mongo-data:

@@ -3,6 +3,7 @@ const { AppError } = require('../middleware/errorHandler');
 const { recordAudit } = require('../services/auditService');
 const { ACTIVE_ALERT_FILTER } = require('../services/alertService');
 const { ACK_TIMEOUT_SECONDS } = require('../services/patientMonitorService');
+const { recordActivity } = require('../services/caregiverService');
 
 const decorateAlert = (alert, now = Date.now()) => {
   const data = alert.toObject ? alert.toObject() : { ...alert };
@@ -77,6 +78,7 @@ exports.acknowledgeAlert = async (req, res, next) => {
       );
       alert.acknowledgmentNote = String(req.body.note || '').trim().slice(0, 500);
       await alert.save();
+      await recordActivity(req.user._id, 'acknowledged');
 
       await recordAudit({
         action: 'alert_acknowledged',
@@ -133,6 +135,7 @@ exports.dismissAlert = async (req, res, next) => {
       alert.dismissReason = reason.slice(0, 500);
       alert.dedupKey = undefined;
       await alert.save();
+      await recordActivity(req.user._id, 'dismissed');
 
       await recordAudit({
         action: 'alert_dismissed',

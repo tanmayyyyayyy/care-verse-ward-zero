@@ -10,6 +10,7 @@ const {
 } = require('./alertService');
 const { assessVitalsQuality } = require('./vitalsQuality');
 const { recordAudit } = require('./auditService');
+const { getPatientCare, syncForecastAlert, emitCareUpdate } = require('./careService');
 
 const toDateOrNull = (value) => {
   if (!value) return null;
@@ -184,6 +185,23 @@ const ingestVitals = async ({ patient, payload, io = null, actor = null }) => {
   const dataQuality = assessVitalsQuality(vitals);
   emitVitalsUpdate(io, patient, vitals, assessment, dataQuality);
 
+  // Predict + contextual intelligence. A failure here must never block ingestion:
+  // the vitals and threshold alerts above are already safely stored.
+  let care = null;
+  if (!isLate) {
+    try {
+      const snapshot = await getPatientCare(patient);
+      if (snapshot) {
+        care = snapshot.care;
+        const forecastAlerts = await syncForecastAlert({ patient, care, io });
+        alerts.push(...forecastAlerts);
+        emitCareUpdate(io, patient, care);
+      }
+    } catch (error) {
+      console.warn('[care] forecast/context step failed:', error.message);
+    }
+  }
+
   return {
     duplicate: false,
     vitals,
@@ -196,6 +214,7 @@ const ingestVitals = async ({ patient, payload, io = null, actor = null }) => {
     dataQuality,
     isLate,
     actor,
+    care,
   };
 };
 

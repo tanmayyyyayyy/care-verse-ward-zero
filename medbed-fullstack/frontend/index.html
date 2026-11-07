@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CareVerse — Condition-Adaptive Clinical Transfer Intelligence</title>
+<title>CareVerse Ward Zero — Intelligent Home Care Monitoring</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -747,6 +747,7 @@ tr:hover td{background:var(--blue-50);}
   #page-patients>div[style*="repeat(4,1fr)"]{grid-template-columns:minmax(0,1fr)!important;}
 }
 </style>
+<link rel="stylesheet" href="care.css">
 </head>
 <body>
  
@@ -758,6 +759,14 @@ tr:hover td{background:var(--blue-50);}
   <div class="nav active" id="nav-dashboard" onclick="switchPage('dashboard')">
     <span class="nav-tooltip">Command Dashboard</span>
     <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+  </div>
+  <div class="nav" id="nav-care" onclick="switchPage('care')">
+    <span class="nav-tooltip">Home Care Intelligence</span>
+    <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 00-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 000-7.8z"/><path d="M3 12h4l2-3 3 6 2-3h7"/></svg>
+  </div>
+  <div class="nav" id="nav-caregivers" onclick="switchPage('caregivers')">
+    <span class="nav-tooltip">Caregivers and Home Hub</span>
+    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><circle cx="18" cy="16" r="4"/><path d="M18 14v2l1 1"/></svg>
   </div>
   <div class="nav" id="nav-patients" onclick="switchPage('patients')">
     <span class="nav-tooltip">All Patients</span>
@@ -794,7 +803,7 @@ tr:hover td{background:var(--blue-50);}
   <header class="topbar">
     <div class="t-brand">
       <div class="name">CareVerse</div>
-      <div class="cv-tagline">Where Every Patient Transfer is Safe, Smart and Error-Free</div>
+      <div class="cv-tagline">A hospital ward that fits inside a bedroom</div>
     </div>
     <div class="page-crumb" id="pageCrumb">Command Dashboard</div>
     <div class="live-pill"><div class="live-dot"></div>LIVE</div>
@@ -1343,6 +1352,10 @@ tr:hover td{background:var(--blue-50);}
       </div>
     </div>
   </div>
+ 
+  <!-- HOME CARE INTELLIGENCE (rendered by care.js) -->
+  <div class="page" id="page-care"></div>
+  <div class="page" id="page-caregivers"></div>
  
   <!-- SETTINGS PAGE -->
   <div class="page" id="page-settings">
@@ -2296,5 +2309,6 @@ document.addEventListener('DOMContentLoaded',async function(){
 });
 </script>
 <script src="ml_socket_client.js"></script>
+<script src="care.js"></script>
 </body>
 </html>

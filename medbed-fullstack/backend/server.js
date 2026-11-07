@@ -24,6 +24,8 @@ const alertRoutes     = require('./routes/alertRoutes');
 const hospitalRoutes  = require('./routes/hospitalRoutes');
 const auditRoutes     = require('./routes/auditRoutes');
 const mlRoutes        = require('./routes/mlRoutes');
+const careRoutes      = require('./routes/careRoutes');
+const deviceGateway   = require('./services/deviceGateway');
 const { initBedSensorEmitter } = require('./sockets/bedSensorEmitter');
 const { startPatientMonitor } = require('./services/patientMonitorService');
 const { initMLBroadcaster } = require('./sockets/mlSocketBroadcaster');
@@ -111,6 +113,7 @@ app.use('/api/alerts',     alertRoutes);
 app.use('/api/hospitals',  hospitalRoutes);
 app.use('/api/audit',      auditRoutes);
 app.use('/api/ml',         mlRoutes);
+app.use('/api/care',       careRoutes);
 
 // ── Health checks ────────────────────────────────────────────────────────────
 const MONGO_STATES = {
@@ -218,6 +221,7 @@ app.set('io', io);
 
 // Boot socket handlers
 initSockets(io);
+deviceGateway.init(io);
 initMLBroadcaster(io);
 
 initBedSensorEmitter(io);

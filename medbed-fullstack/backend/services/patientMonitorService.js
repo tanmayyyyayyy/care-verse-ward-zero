@@ -4,6 +4,7 @@ const { Alert } = require('../models/index');
 const { buildDedupKey, createAlert, ACTIVE_ALERT_FILTER } = require('./alertService');
 const { assessVitalsQuality } = require('./vitalsQuality');
 const { recordAudit } = require('./auditService');
+const { countOnDuty } = require('./caregiverService');
 
 const ACK_TIMEOUT_SECONDS = Number(process.env.ALERT_ACK_TIMEOUT_SECONDS) || 300;
 const MONITOR_INTERVAL_MS = Number(process.env.PATIENT_MONITOR_INTERVAL_MS) || 15000;
@@ -115,11 +116,45 @@ const runEscalationCycle = async (io = null, now = Date.now()) => {
   return escalated;
 };
 
+/**
+ * Caregiver coverage: if alerts wait for acknowledgment and nobody is checked in,
+ * raise one escalation to the wider team (doctor/admin) instead of letting the
+ * alerts sit with an absent caregiver.
+ */
+const COVERAGE_GRACE_SECONDS = Number(process.env.COVERAGE_GRACE_SECONDS) || 60;
+const runCoverageMonitor = async (io = null, now = Date.now()) => {
+  const waiting = await Alert.find({
+    ...ACTIVE_ALERT_FILTER,
+    isAcknowledged: false,
+    type: { $ne: 'escalation' },
+    createdAt: { $lte: new Date(now - COVERAGE_GRACE_SECONDS * 1000) },
+  }).sort({ createdAt: 1 });
+  if (!waiting.length) return null;
+  if ((await countOnDuty()) > 0) return null;
+
+  const patient = await Patient.findById(waiting[0].patient).select('patientId name assignedDoctor');
+  if (!patient) return null;
+  const result = await createAlert(
+    {
+      patient: patient._id,
+      type: 'escalation',
+      severity: 'critical',
+      message: `No caregiver is checked in while ${waiting.length} alert(s) await acknowledgment. Escalating beyond the care team.`,
+      assignedTo: patient.assignedDoctor || null,
+      dedupKey: buildDedupKey('coverage', 'none'),
+      metadata: { reason: 'no_caregiver_coverage', unacknowledged: waiting.length },
+    },
+    io
+  );
+  return result.created ? result.alert : null;
+};
+
 const startPatientMonitor = (io = null) => {
   const run = async () => {
     try {
       await runDataQualityMonitor(io);
       await runEscalationCycle(io);
+      await runCoverageMonitor(io);
     } catch (error) {
       console.error('Patient monitor cycle failed:', error.message);
     }
@@ -134,6 +169,7 @@ const startPatientMonitor = (io = null) => {
 module.exports = {
   ACK_TIMEOUT_SECONDS,
   runDataQualityMonitor,
+  runCoverageMonitor,
   runEscalationCycle,
   startPatientMonitor,
 };

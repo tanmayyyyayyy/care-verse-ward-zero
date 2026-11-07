@@ -3,7 +3,25 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const ml = require('../services/mlPredictionService');
 
-test('medbed-ml health check returns ok when ML service is active', async () => {
+// These are INTEGRATION tests: they need the medbed-ml FastAPI service on
+// ML_SERVICE_URL (default http://127.0.0.1:8001). On a clean checkout without
+// that service they are reported as skipped instead of failing the suite.
+let mlUp = null;
+const skipIfMlDown = async (t) => {
+  if (mlUp === null) {
+    try {
+      const health = await ml.checkHealth();
+      mlUp = Boolean(health && health.ok);
+    } catch {
+      mlUp = false;
+    }
+  }
+  if (!mlUp) t.skip('medbed-ml service not reachable (start it on :8001 to run these)');
+  return !mlUp;
+};
+
+test('medbed-ml health check returns ok when ML service is active', async (t) => {
+  if (await skipIfMlDown(t)) return;
   const health = await ml.checkHealth();
   assert.equal(typeof health, 'object');
   assert.equal(health.ok, true);
@@ -14,7 +32,8 @@ test('medbed-ml health check returns ok when ML service is active', async () => 
   assert.ok(health.models_loaded.includes('safety'));
 });
 
-test('predictTransfer produces valid risk level, staff count, and estimated time', async () => {
+test('predictTransfer produces valid risk level, staff count, and estimated time', async (t) => {
+  if (await skipIfMlDown(t)) return;
   const result = await ml.predictTransfer({
     age: 67,
     weight_kg: 78.5,
@@ -39,7 +58,8 @@ test('predictTransfer produces valid risk level, staff count, and estimated time
   assert.equal(typeof result.inference_ms, 'number');
 });
 
-test('predictVitals evaluates time-series window with LSTM/GB ensemble', async () => {
+test('predictVitals evaluates time-series window with LSTM/GB ensemble', async (t) => {
+  if (await skipIfMlDown(t)) return;
   const result = await ml.predictVitals({
     heart_rate: [88, 92, 95, 98, 102, 104, 105, 107, 108, 110],
     spo2: [97, 97, 96, 96, 95, 95, 94, 94, 93, 93],
@@ -57,7 +77,8 @@ test('predictVitals evaluates time-series window with LSTM/GB ensemble', async (
   assert.equal(typeof result.inference_ms, 'number');
 });
 
-test('predictSafety evaluates sensor weight, imbalance, and fall risk', async () => {
+test('predictSafety evaluates sensor weight, imbalance, and fall risk', async (t) => {
+  if (await skipIfMlDown(t)) return;
   const result = await ml.predictSafety({
     weight_kg: 78.5,
     age: 67,
@@ -86,7 +107,8 @@ test('predictSafety evaluates sensor weight, imbalance, and fall risk', async ()
   assert.equal(typeof result.inference_ms, 'number');
 });
 
-test('predictAll returns predictions for multiple models in single call', async () => {
+test('predictAll returns predictions for multiple models in single call', async (t) => {
+  if (await skipIfMlDown(t)) return;
   const result = await ml.predictAll({
     transfer: {
       age: 60, weight_kg: 70, condition: 0, department_from: 0, department_to: 1,

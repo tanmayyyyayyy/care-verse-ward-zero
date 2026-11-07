@@ -12,7 +12,9 @@ const DEMO_PASSWORD = process.env.DEMO_PASSWORD || 'WardZero!2026';
 const users = [
   { name: 'Ward Zero Admin', email: 'admin@careverse.com', role: 'admin', department: 'Operations' },
   { name: 'Dr. Asha Rao', email: 'doctor@careverse.com', role: 'doctor', department: 'Critical Care' },
-  { name: 'Nurse Ravi Kumar', email: 'nurse@careverse.com', role: 'nurse', department: 'Ward Zero' },
+  { name: 'Nurse Ravi Kumar', email: 'nurse@careverse.com', role: 'nurse', department: 'Home Care' },
+  { name: 'Priya Nair (home caregiver)', email: 'caregiver@careverse.com', role: 'nurse', department: 'Home Care' },
+  { name: 'Meera Iyer (night caregiver)', email: 'night@careverse.com', role: 'nurse', department: 'Home Care' },
 ];
 
 const patients = [
@@ -85,26 +87,30 @@ const main = async () => {
   const savedUsers = {};
 
   for (const entry of users) {
-    const user = await User.findOneAndUpdate(
+    await User.updateOne(
       { email: entry.email },
-      { ...entry, password: passwordHash, isActive: true },
-      { upsert: true, new: true, runValidators: false }
+      { $set: { ...entry, password: passwordHash, isActive: true } },
+      { upsert: true }
     );
+    const user = await User.findOne({ email: entry.email });
     savedUsers[entry.role] = user;
     console.log(`Seeded ${entry.role}: ${entry.email}`);
   }
 
   for (const entry of patients) {
     const { vitals, ...patientData } = entry;
-    const patient = await Patient.findOneAndUpdate(
+    await Patient.updateOne(
       { patientId: entry.patientId },
       {
-        ...patientData,
-        assignedDoctor: savedUsers.doctor._id,
-        isActive: true,
+        $set: {
+          ...patientData,
+          assignedDoctor: savedUsers.doctor._id,
+          isActive: true,
+        },
       },
-      { upsert: true, new: true, runValidators: true }
+      { upsert: true, runValidators: true }
     );
+    const patient = await Patient.findOne({ patientId: entry.patientId });
 
     const readingId = `seed-${patient.patientId}-baseline`;
     const exists = await Vitals.findOne({ patient: patient._id, readingId });

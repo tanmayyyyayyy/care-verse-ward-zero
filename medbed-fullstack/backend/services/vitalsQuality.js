@@ -9,6 +9,13 @@ const getVitalsTimestamp = (vitals) => {
   return Number.isNaN(timestamp.getTime()) ? null : timestamp;
 };
 
+const humanAge = (seconds) => {
+  if (seconds < 120) return `${seconds}s`;
+  if (seconds < 7200) return `${Math.round(seconds / 60)} min`;
+  if (seconds < 172800) return `${Math.round(seconds / 3600)} h`;
+  return `${Math.round(seconds / 86400)} days`;
+};
+
 const assessVitalsQuality = (
   latestVitals,
   now = Date.now(),
@@ -42,11 +49,11 @@ const assessVitalsQuality = (
   if (ageSeconds >= offlineSeconds) {
     status = 'offline';
     label = 'Offline';
-    message = `No reading for ${ageSeconds}s. Sensor is offline; treat current state as unknown.`;
+    message = `No reading for ${humanAge(ageSeconds)}. Sensor is offline; treat current state as unknown.`;
   } else if (ageSeconds >= staleSeconds) {
     status = 'stale';
     label = 'Stale';
-    message = `Latest reading is ${ageSeconds}s old. Do not treat stale data as stable.`;
+    message = `Latest reading is ${humanAge(ageSeconds)} old. Do not treat stale data as stable.`;
   }
 
   return {

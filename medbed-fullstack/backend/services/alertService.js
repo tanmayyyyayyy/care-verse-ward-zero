@@ -142,6 +142,26 @@ const resolveVitalsAlerts = async (patientId, io, reason = 'Vitals returned to a
   return resolved;
 };
 
+const resolveAlertsByType = async (patientId, types, io, reason) => {
+  const now = new Date();
+  const alerts = await Alert.find({
+    patient: patientId,
+    type: { $in: types },
+    ...ACTIVE_ALERT_FILTER,
+  });
+  const resolved = [];
+  for (const alert of alerts) {
+    alert.resolvedAt = now;
+    alert.resolvedReason = reason;
+    alert.resolvedBySystem = true;
+    alert.dedupKey = undefined;
+    await alert.save();
+    resolved.push(alert);
+    emitAlert(io, 'alert:resolved', alert);
+  }
+  return resolved;
+};
+
 const resolveAllAlertsForPatient = async (patientId, io, reason) => {
   const now = new Date();
   const alerts = await Alert.find({ patient: patientId, ...ACTIVE_ALERT_FILTER });
@@ -187,6 +207,7 @@ module.exports = {
   buildVitalsAlertCandidates,
   createAlertsForAssessment,
   emitAlert,
+  resolveAlertsByType,
   resolveAllAlertsForPatient,
   resolveDataQualityAlerts,
   resolveVitalsAlerts,

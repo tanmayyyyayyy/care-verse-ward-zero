@@ -1,5 +1,14 @@
 {
-  "dependencies": {
-    "nodemailer": "^8.0.4"
-  }
+  "name": "care-verse-ward-zero",
+  "version": "1.0.0",
+  "description": "CareVerse Ward Zero: Intelligent Home Healthcare Monitoring and Response System for Operation Ward Zero",
+  "scripts": {
+    "start": "cd medbed-fullstack/backend && npm start",
+    "test": "cd medbed-fullstack/backend && npm test",
+    "test:e2e": "cd medbed-fullstack/backend && npm run test:e2e",
+    "test:all": "cd medbed-fullstack/backend && npm run test:all",
+    "seed": "cd medbed-fullstack/backend && npm run seed"
+  },
+  "author": "Tanmay Jain",
+  "license": "UNLICENSED"
 }
