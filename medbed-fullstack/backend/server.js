@@ -155,9 +155,19 @@ app.get('/api/health/ready', async (req, res) => {
 
   const ai = await aiService.checkHealth();
   const ml = await mlPredictionService.checkHealth();
+  const gwStatus = deviceGateway.getStatus();
+  const ioInstance = req.app.get('io');
+  const socketStatus = ioInstance ? 'up' : 'down';
+  const socketClients = ioInstance?.engine?.clientsCount ?? 0;
+  const isFallback = Boolean(
+    ai.fallbackActive ||
+    (typeof aiService.isSimulatedDown === 'function' && aiService.isSimulatedDown()) ||
+    ai.status !== 'up'
+  );
+
   const databaseReady = mongoStatus === 'up';
   const overallStatus = databaseReady
-    ? (ai.status === 'up' && ml.ok)
+    ? (ai.status === 'up' && ml.ok && !isFallback)
       ? 'ready'
       : 'degraded'
     : 'not_ready';
@@ -177,6 +187,7 @@ app.get('/api/health/ready', async (req, res) => {
       },
       ai: {
         ...ai,
+        fallbackActive: isFallback,
         required: false,
       },
       ml: {
@@ -187,8 +198,28 @@ app.get('/api/health/ready', async (req, res) => {
         required: false,
         ...(ml.error ? { error: ml.error } : {}),
       },
+      socket: {
+        status: socketStatus,
+        connectedClients: socketClients,
+        required: false,
+      },
+      buffer: {
+        status: gwStatus.isOnline ? 'online' : 'offline',
+        isOnline: gwStatus.isOnline,
+        queueLength: gwStatus.queueLength,
+        deadLetterCount: gwStatus.deadLetterCount,
+        totalEnqueued: gwStatus.totalEnqueued,
+        totalReplayed: gwStatus.totalReplayed,
+        totalDuplicates: gwStatus.totalDuplicates,
+        isReplaying: gwStatus.isReplaying,
+        isDurable: gwStatus.isDurable,
+        fallbackActive: isFallback,
+        delaySeconds: gwStatus.delaySeconds || 0,
+        isSensorPaused: Boolean(gwStatus.isSensorPaused),
+        required: false,
+      },
     },
-    degraded: databaseReady && (ai.status !== 'up' || !ml.ok),
+    degraded: databaseReady && (ai.status !== 'up' || !ml.ok || isFallback),
   });
 });
 

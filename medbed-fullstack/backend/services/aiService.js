@@ -9,6 +9,14 @@ const DEFAULT_TIMEOUT_MS = 3000;
 const HEALTH_TIMEOUT_MS = 1500;
 const RISK_LEVELS = new Set(['low', 'medium', 'high']);
 
+let simulatedDown = false;
+
+const setSimulatedDown = (isDown) => {
+  simulatedDown = Boolean(isDown);
+};
+
+const isSimulatedDown = () => simulatedDown;
+
 const AI_REQUEST_FIELDS = Object.freeze({
   heartRate: 'heart_rate',
   spo2: 'spo2',
@@ -158,6 +166,9 @@ const createAiService = ({
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) => {
   const predictRisk = async (data) => {
+    if (simulatedDown) {
+      return buildFallbackAssessment(data, 'AI service simulated failure (injected fault)');
+    }
     try {
       const response = await httpClient.post(`${baseUrl}/predict`, toAiRequest(data), {
         timeout: timeoutMs,
@@ -169,6 +180,15 @@ const createAiService = ({
   };
 
   const checkHealth = async () => {
+    if (simulatedDown) {
+      return {
+        status: 'down',
+        url: baseUrl,
+        latencyMs: 0,
+        error: 'AI service simulated failure (injected fault)',
+        fallbackActive: true,
+      };
+    }
     const startedAt = Date.now();
 
     try {
@@ -260,4 +280,6 @@ module.exports = {
   riskScoreFromAssessment,
   getConditionProtocol,
   suggestRoute,
+  setSimulatedDown,
+  isSimulatedDown,
 };

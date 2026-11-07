@@ -61,30 +61,63 @@ The optional `medbed-ml` service (BiLSTM + gradient boosting vitals model, safet
 5. Back on the Home Hub: **Cut the link**, send readings, **Reconnect and replay**.
 6. Sign in as the caregiver in another window: **Check in**, acknowledge the alert, and see the response time recorded.
 
-Full narration: [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md).
+## Automated Scripted Demo (3-Minute Story Runner)
+
+You can run the entire 6-phase Ward Zero narrative hands-free via the CLI or dashboard:
+```bash
+# Automated scripted demo story (fast mode, ~25s)
+./scripts/run_demo_story.sh --fast
+
+# Real-time pacing (~3 minutes)
+./scripts/run_demo_story.sh --full
+
+# Custom pacing (e.g. 3x speed)
+./scripts/run_demo_story.sh --speed 3
+```
+
+The script exercises the full mission loop:
+**Sense** (stable vitals) → **Understand** (slow decline + caregiver note with symptom extraction) → **Predict** (24–48h deterioration trend predicted) → **Alert** (deterioration alert raised) → **Escalation** (unacknowledged alert escalates to clinician) → **Respond** (doctor ACK + intervention note + vital recovery).
+
+Or trigger it manually from the dashboard:
+1. Sign in as the doctor (`doctor@careverse.com` / `WardZero!2026`).
+2. Open the **Demo Story** widget on the dashboard and click **▶ Run Demo Story (Fast)**.
+3. Observe live progress across all 6 phases with real-time Socket.IO step events.
+
+## Failure Injection & System Reliability Testing
+
+The dashboard includes a dedicated **Failure Injection Panel** (admin/doctor only, operates exclusively on synthetic sensors):
+- **Pause Sensor**: halts incoming sensor stream without dropping connection.
+- **Drop Network**: disconnects gateway; readings safely queue in the durable FIFO replay buffer.
+- **Reconnect & Replay**: re-establishes link and drains queue in strict order with backoff retry and deduplication.
+- **Simulate AI Down**: injects AI service outage; backend immediately activates rule-based fallback and displays the fallback badge.
+- **Inject Delay**: adds a 5-second simulated transport latency.
+- **Inject Duplicate / Out-of-Order**: tests deduplication and late-arrival handling (`isLate: true`).
+- **Live System Health Panel**: real-time Mongo, AI, ML, Socket, and buffer depth / dead-letter telemetry via `/api/health/ready`.
 
 ## Documentation
+- [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md): 24–48h deterioration trend model specification, features, training setup, and evaluation metrics
 - [`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md): problem, architecture, risk method, limitations, future work
 - [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md): demo video script
-- [`CONTEXT.md`](CONTEXT.md): engineering notes from the earlier build
+- [`CONTEXT.md`](CONTEXT.md): engineering source of truth and architectural audit
 - [`docs/LEGACY_README.md`](docs/LEGACY_README.md): original README (inherited marketing copy; do not quote unmeasured claims)
 
 ## Tests
 ```bash
 cd medbed-fullstack/backend
-npm test            # 62 tests; 5 integration tests skip automatically if the optional ML service is not running
-npm run test:e2e    # Playwright browser suite (requires Chromium)
+npm test            # 84 passing unit/safety tests (5 integration tests skip if ML service on :8001 is offline)
+npm run test:e2e    # 61/61 Playwright browser E2E checks across 9 phases (requires Chrome)
 ```
 
 ## Key code
 | Area | File |
 |---|---|
 | Early-warning score | `backend/services/earlyWarning.js` |
-| Caregiver-note context | `backend/services/noteContext.js` |
-| 24 to 48 h forecast | `backend/services/deteriorationForecast.js` |
+| Caregiver-note context | `backend/services/noteContext.js`, `symptomRules.json` |
+| 24 to 48 h trend forecast | `backend/services/trendPredictionService.js`, `ai-service/api.py` |
 | Composite explained risk | `backend/services/careIntelligence.js` |
 | Caregiver presence / response | `backend/services/caregiverService.js` |
 | Home hub (outage + replay) | `backend/services/deviceGateway.js`, `sensorReplayBuffer.js` |
+| Failure injection & demo | `backend/services/demoScenarioService.js`, `scripts/run_demo_story.sh` |
 | New API | `backend/routes/careRoutes.js` → `/api/care/*` |
 | New UI | `frontend/care.js`, `frontend/care.css` |
 

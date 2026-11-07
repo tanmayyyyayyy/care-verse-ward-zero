@@ -14,10 +14,13 @@
     selectedId: null,
     care: null,
     notes: [],
+    trend: null,
     log: [],
     streamTimer: null,
     busy: false,
+    again: false,
     refreshTimer: null,
+    demoStep: null,
   };
 
   const RISK_LABEL = { low: 'Low', medium: 'Medium', high: 'High', unknown: 'Unknown' };
@@ -493,7 +496,10 @@
         <div class="wz-card"><div class="wz-h"><h3>Who is responding</h3></div><div id="wzRoster"></div></div>
         <div class="wz-card"><div class="wz-h"><h3>How escalation works</h3></div>${ladderCard()}</div>
       </div>
-      <div class="wz-card"><div class="wz-h"><h3>Home hub and sensor link</h3><small>Resilience demo</small></div><div id="wzGateway"></div></div>
+      <div class="wz-stack">
+        <div class="wz-card"><div class="wz-h"><h3>Home hub and sensor link</h3><small>Resilience demo</small></div><div id="wzGateway"></div></div>
+        <div class="wz-card" id="wzFailureCard"><div class="wz-h"><h3>Failure injection panel</h3><small>Admin / Doctor only</small></div><div id="wzFailureBody"></div></div>
+      </div>
     </div>`;
 
   const renderCaregivers = () => {
@@ -581,6 +587,9 @@
     renderDashboardCaregiverWidget();
     renderDashboardTrendWidget();
     renderDashboardNotesWidget();
+    renderFailureInjectionWidget();
+    renderSystemHealthWidget();
+    renderDemoWidget();
   };
 
   const scheduleRefresh = (delay = 300) => {
@@ -621,6 +630,33 @@
     });
     sock.on('note:new', () => scheduleRefresh(200));
     ['alert:new', 'alert:resolved', 'alert:acknowledged', 'alert:escalated'].forEach((evt) => sock.on(evt, () => scheduleRefresh(800)));
+
+    // Feature 4: Failure injection + demo story events
+    sock.on('failure_injection:update', (status) => {
+      state.gateway = { ...state.gateway, ...status };
+      renderCaregivers();
+      renderFailureInjectionWidget();
+      renderSystemHealthWidget();
+    });
+    sock.on('demo:step', (step) => {
+      state.demoStep = step;
+      renderDemoWidget();
+      const stepNames = ['—','Stable','Decline','Trend Risk','Escalation','Caregiver ACK','Recovery'];
+      toast(`Demo: ${step.title || stepNames[step.step] || 'Step ' + step.step}`, false);
+    });
+    sock.on('demo:completed', (summary) => {
+      state.demoStep = { ...state.demoStep, isRunning: false, phase: 'recovery', step: 6 };
+      renderDemoWidget();
+      toast(`✅ Demo complete — ${summary.missionLoop}`, false);
+      scheduleRefresh(500);
+    });
+    sock.on('demo:error', (d) => {
+      state.demoStep = state.demoStep || {};
+      state.demoStep.isRunning = false;
+      state.demoStep.error = d.error;
+      renderDemoWidget();
+      toast(`Demo error: ${d.error}`, true);
+    });
     hookSocket.done = true;
     return true;
   };
@@ -952,6 +988,283 @@
     }, 1000);
     setTimeout(() => clearInterval(waitHook), 60000);
     refresh();
+  };
+
+  // ── Feature 4: Failure Injection Panel ──────────────────────────────────────
+  const renderFailureInjectionWidget = () => {
+    if (!canControlGateway()) return; // admin/doctor only
+    const dash = document.getElementById('page-dashboard');
+    if (!dash) return;
+    let card = document.getElementById('wzDashFailureCard');
+    if (!card) {
+      const col3 = dash.querySelectorAll('.dash-col')[2];
+      if (!col3) return;
+      card = document.createElement('div');
+      card.id = 'wzDashFailureCard';
+      card.className = 'card';
+      col3.appendChild(card);
+    }
+
+    const g = state.gateway || {};
+    const isDown = g.aiSimulatedDown || false;
+    const isPaused = g.isSensorPaused || false;
+    const hasDelay = (g.delaySeconds || 0) > 0;
+    const isOffline = !g.isOnline;
+    const queueLen = g.queueLength || 0;
+    const deadLen = g.deadLetterCount || 0;
+    const isReplaying = g.isReplaying || false;
+    const patients = state.overview.map((r) =>
+      `<option value="${esc(r.patientId)}">${esc(r.name)}</option>`
+    ).join('');
+
+    card.innerHTML = `
+      <div class="ch">
+        <span class="ct">⚡ Failure Injection</span>
+        <span class="cb cb-yellow">Admin / Doctor — Synthetic Only</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-light);margin-bottom:10px;">
+        Inject simulated failures to verify system resilience without affecting real data.
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">
+        <button id="wzFiPauseSensor" class="filter-btn ${isPaused ? 'active' : ''}" title="Halt synthetic sensor readings for selected patient">
+          ${isPaused ? '▶ Resume Sensor' : '⏸ Pause Sensor'}
+        </button>
+        <button id="wzFiNetworkDrop" class="filter-btn ${isOffline ? 'active' : ''}" title="Simulate network drop — readings queue in buffer">
+          ${isOffline ? '🔁 Reconnect Network' : '📡 Drop Network'}
+        </button>
+        <button id="wzFiAiDown" class="filter-btn ${isDown ? 'active' : ''}" title="Force AI service to return fallback (rule-based) response">
+          ${isDown ? '🟢 Restore AI' : '🤖 Simulate AI Down'}
+        </button>
+        <button id="wzFiDelay" class="filter-btn ${hasDelay ? 'active' : ''}" title="Inject a 5-second delay before readings are delivered">
+          ${hasDelay ? `⏱ Delay Active (${g.delaySeconds}s) — Clear` : '⏱ Delay Data 5s'}
+        </button>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
+        <select id="wzFiPatient" class="wz-select" style="font-size:11px;flex:1;">${patients}</select>
+        <button id="wzFiDuplicate" class="filter-btn" title="Send duplicate reading — backend should deduplicate">📋 Inject Duplicate</button>
+        <button id="wzFiOutOfOrder" class="filter-btn" title="Send an out-of-order reading — backend should flag isLate">🔀 Out-of-Order</button>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        <div class="wz-kpi ${queueLen > 0 ? 'bad' : ''}" style="min-width:60px;padding:5px 8px;">
+          <div class="n" style="font-size:16px;">${queueLen}</div>
+          <div class="l">Buffer depth</div>
+        </div>
+        <div class="wz-kpi ${isReplaying ? 'warn' : ''}" style="min-width:60px;padding:5px 8px;">
+          <div class="n" style="font-size:16px;">${isReplaying ? '↺' : '—'}</div>
+          <div class="l">Replay</div>
+        </div>
+        <div class="wz-kpi ${deadLen > 0 ? 'bad' : ''}" style="min-width:60px;padding:5px 8px;">
+          <div class="n" style="font-size:16px;">${deadLen}</div>
+          <div class="l">Dead-letter</div>
+        </div>
+        <div class="wz-kpi ${isDown ? 'bad' : ''}" style="min-width:60px;padding:5px 8px;">
+          <div class="n" style="font-size:12px;">${isDown ? 'RULE' : 'ML'}</div>
+          <div class="l">AI source${isDown ? ' — Fallback active' : ''}</div>
+        </div>
+      </div>
+
+      <button id="wzFiResetAll" class="wz-btn danger" style="width:100%;font-size:11px;">↩ Reset All Injected Failures</button>
+      <div style="font-size:9px;color:var(--text-light);margin-top:6px;">
+        Real sensor flows are never interrupted. These controls operate on the synthetic simulation layer only.
+      </div>`;
+
+    // Wire up button handlers
+    const injectAction = async (action, options = {}) => {
+      try {
+        const patientId = document.getElementById('wzFiPatient')?.value;
+        const res = await post('/api/care/failure-injection', { action, patientId, ...options });
+        state.gateway = { ...state.gateway, ...(res.status || {}) };
+        renderFailureInjectionWidget();
+        const msgs = {
+          pause_sensor: 'Sensor paused — readings will be dropped',
+          resume_sensor: 'Sensor resumed',
+          simulate_ai_down: '🤖 AI simulated as DOWN — rule fallback active',
+          restore_ai: '🟢 AI service restored',
+          simulate_network_drop: '📡 Network dropped — readings queuing in buffer',
+          reconnect_network: '🔁 Network reconnected — buffered readings replaying',
+          delay_data: `⏱ ${options.delaySeconds || 5}s delay active`,
+          reset_faults: '↩ All failures cleared',
+          reset: '↩ All failures cleared',
+          send_duplicate: '📋 Duplicate reading injected — watch for dedup',
+          send_out_of_order: '🔀 Out-of-order reading injected — watch for isLate flag',
+        };
+        toast(msgs[action] || `✅ ${action} applied`, false);
+        scheduleRefresh(400);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    };
+
+    card.querySelector('#wzFiPauseSensor')?.addEventListener('click', () => {
+      const paused = !(state.gateway?.isSensorPaused);
+      injectAction(paused ? 'pause_sensor' : 'resume_sensor', { paused });
+    });
+    card.querySelector('#wzFiNetworkDrop')?.addEventListener('click', () => {
+      const isCurrentlyOffline = !(state.gateway?.isOnline !== false);
+      injectAction(isCurrentlyOffline ? 'reconnect_network' : 'simulate_network_drop');
+    });
+    card.querySelector('#wzFiAiDown')?.addEventListener('click', () => {
+      const isCurrentlyDown = state.gateway?.aiSimulatedDown;
+      injectAction(isCurrentlyDown ? 'restore_ai' : 'simulate_ai_down');
+    });
+    card.querySelector('#wzFiDelay')?.addEventListener('click', () => {
+      const hasCurrentDelay = (state.gateway?.delaySeconds || 0) > 0;
+      injectAction('delay_data', { delaySeconds: hasCurrentDelay ? 0 : 5 });
+    });
+    card.querySelector('#wzFiDuplicate')?.addEventListener('click', () => injectAction('send_duplicate'));
+    card.querySelector('#wzFiOutOfOrder')?.addEventListener('click', () => injectAction('send_out_of_order'));
+    card.querySelector('#wzFiResetAll')?.addEventListener('click', () => injectAction('reset_faults'));
+  };
+
+  // ── Feature 4: System Health Panel ──────────────────────────────────────────
+  const renderSystemHealthWidget = async () => {
+    const dash = document.getElementById('page-dashboard');
+    if (!dash) return;
+    let card = document.getElementById('wzDashHealthCard');
+    if (!card) {
+      const col2 = dash.querySelectorAll('.dash-col')[1];
+      if (!col2) return;
+      card = document.createElement('div');
+      card.id = 'wzDashHealthCard';
+      card.className = 'card';
+      col2.appendChild(card);
+    }
+
+    const statusDot = (up) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${up ? 'var(--green)' : 'var(--red)'};margin-right:5px;"></span>`;
+
+    let health = null;
+    try {
+      health = await apiFetch('/api/health/ready').catch(() => null);
+    } catch { health = null; }
+
+    if (!health) {
+      card.innerHTML = `<div class="ch"><span class="ct">🔍 System Health</span></div><div class="wz-muted">Loading…</div>`;
+      return;
+    }
+
+    const checks = health.checks || {};
+    const mongo = checks.mongodb || {};
+    const ai = checks.ai || {};
+    const ml = checks.ml || {};
+    const socket = checks.socket || {};
+    const buffer = checks.buffer || {};
+
+    const fmtLatency = (ms) => ms != null ? `${ms}ms` : '—';
+
+    card.innerHTML = `
+      <div class="ch">
+        <span class="ct">🔍 System Health</span>
+        <span class="cb ${health.status === 'ready' ? 'cb-green' : health.status === 'degraded' ? 'cb-yellow' : 'cb-red'}">${health.status?.toUpperCase() || '—'}</span>
+      </div>
+      <div style="font-size:11px;line-height:2;">
+        <div>${statusDot(mongo.status === 'up')} <strong>MongoDB</strong> — ${esc(mongo.state || mongo.status || '—')}</div>
+        <div>${statusDot(ai.status === 'up' && !ai.fallbackActive)} <strong>AI Service</strong> — ${ai.status === 'up' ? (ai.fallbackActive ? '⚠ Rule fallback active' : `up ${fmtLatency(ai.latencyMs)}`) : esc(ai.error || 'down')}</div>
+        <div>${statusDot(ml.status === 'up')} <strong>ML Service</strong> — ${ml.status === 'up' ? `${ml.modelsReady} model(s) ready` : esc(ml.error || 'down')} <span class="wz-muted">(optional)</span></div>
+        <div>${statusDot(socket.status === 'up')} <strong>Socket.IO</strong> — ${socket.status === 'up' ? `${socket.connectedClients} client(s)` : 'down'}</div>
+      </div>
+      <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;font-size:11px;">
+        <div style="font-weight:600;margin-bottom:4px;">Buffer Stats</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <span class="${buffer.queueLength > 0 ? 'wz-chip bad' : 'wz-chip low'}">${buffer.queueLength ?? 0} queued</span>
+          <span class="wz-chip ${buffer.deadLetterCount > 0 ? 'bad' : 'unknown'}">${buffer.deadLetterCount ?? 0} dead-letter</span>
+          <span class="wz-chip ${buffer.isReplaying ? 'medium' : 'unknown'}">${buffer.isReplaying ? 'Replaying' : 'Idle'}</span>
+          ${buffer.fallbackActive ? '<span class="wz-chip high">Fallback Active</span>' : ''}
+          ${buffer.isSensorPaused ? '<span class="wz-chip high">Sensor Paused</span>' : ''}
+          ${(buffer.delaySeconds || 0) > 0 ? `<span class="wz-chip medium">Delay ${buffer.delaySeconds}s</span>` : ''}
+        </div>
+      </div>
+      <div style="font-size:9px;color:var(--text-light);margin-top:6px;">${esc(new Date(health.timestamp).toLocaleTimeString())} · uptime ${Math.floor((health.uptimeSeconds || 0) / 60)}m</div>`;
+  };
+
+  // ── Feature 4: Demo Scenario Runner widget ───────────────────────────────────
+  const renderDemoWidget = () => {
+    if (!canControlGateway()) return; // admin/doctor only
+    const dash = document.getElementById('page-dashboard');
+    if (!dash) return;
+    let card = document.getElementById('wzDashDemoCard');
+    if (!card) {
+      const col3 = dash.querySelectorAll('.dash-col')[2];
+      if (!col3) return;
+      card = document.createElement('div');
+      card.id = 'wzDashDemoCard';
+      card.className = 'card';
+      col3.appendChild(card);
+    }
+
+    const demo = state.demoStep || {};
+    const isRunning = Boolean(demo.isRunning);
+    const stepNum = demo.step || 0;
+    const totalSteps = demo.totalSteps || 6;
+
+    const PHASES = [
+      { label: 'Stable Baseline', icon: '💚' },
+      { label: 'Gradual Decline', icon: '🔶' },
+      { label: 'Trend Predicted', icon: '🔮' },
+      { label: 'Escalation', icon: '🚨' },
+      { label: 'Caregiver ACK', icon: '✅' },
+      { label: 'Recovery', icon: '💚' },
+    ];
+
+    const stepsHTML = PHASES.map((p, i) => {
+      const stepIdx = i + 1;
+      const done = stepNum >= stepIdx;
+      const active = stepNum === stepIdx && isRunning;
+      return `<div style="display:flex;align-items:center;gap:5px;font-size:11px;padding:3px 0;opacity:${done || active ? 1 : 0.4};">
+        <span style="width:18px;text-align:center;">${done ? '✔' : active ? '⟳' : '○'}</span>
+        <span>${p.icon} ${p.label}</span>
+      </div>`;
+    }).join('');
+
+    card.innerHTML = `
+      <div class="ch">
+        <span class="ct">🎬 Demo Scenario Runner</span>
+        <span class="cb ${isRunning ? 'cb-yellow' : stepNum === 6 ? 'cb-green' : 'cb-teal'}">${isRunning ? 'RUNNING' : stepNum === 6 ? 'COMPLETE' : 'READY'}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-light);margin-bottom:10px;">
+        3-minute scripted story: <em>Sense → Understand → Predict → Alert → Respond</em>
+      </div>
+
+      <div style="margin-bottom:10px;">${stepsHTML}</div>
+
+      ${demo.title ? `<div style="font-size:11px;font-weight:600;color:var(--blue-600);margin-bottom:4px;">${esc(demo.phase === 'recovery' ? '✅ ' : isRunning ? '⟳ ' : '')}${esc(demo.title)}</div>` : ''}
+      ${demo.description ? `<div style="font-size:10px;color:var(--gray-600);margin-bottom:8px;">${esc(demo.description)}</div>` : ''}
+      ${demo.error ? `<div class="wz-chip high" style="font-size:10px;margin-bottom:6px;">Error: ${esc(demo.error)}</div>` : ''}
+
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button id="wzDemoRun" class="wz-btn ${isRunning ? 'ghost' : 'ok'}" ${isRunning ? 'disabled' : ''} style="flex:1;">
+          ${isRunning ? '⟳ Demo Running…' : stepNum === 6 ? '↺ Run Again' : '▶ Run Demo Story'}
+        </button>
+        ${isRunning ? `<button id="wzDemoCancel" class="wz-btn danger" style="font-size:11px;">✕</button>` : ''}
+      </div>
+      <div style="font-size:9px;color:var(--text-light);margin-top:6px;">
+        Uses fast pacing (~2 minutes). Patient data is synthetic. Admin / Doctor only.
+      </div>`;
+
+    card.querySelector('#wzDemoRun')?.addEventListener('click', async () => {
+      if (isRunning) return;
+      state.demoStep = { isRunning: true, step: 0, totalSteps: 6, phase: 'starting', title: 'Starting Demo Story…', description: 'Setting up simulated home ward environment.' };
+      renderDemoWidget();
+      try {
+        const res = await post('/api/care/demo/story?async=true', { fast: true });
+        if (!res.success) toast(res.message || 'Demo failed to start', true);
+      } catch (err) {
+        state.demoStep = { isRunning: false, error: err.message };
+        renderDemoWidget();
+        toast(err.message, true);
+      }
+    });
+
+    card.querySelector('#wzDemoCancel')?.addEventListener('click', async () => {
+      try {
+        await post('/api/care/demo/story/cancel', {});
+        state.demoStep = { isRunning: false, phase: 'cancelled', title: 'Demo Cancelled' };
+        renderDemoWidget();
+        toast('Demo cancelled.', false);
+      } catch (err) { toast(err.message, true); }
+    });
   };
 
   window.WardZero = { refresh, state };

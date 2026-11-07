@@ -392,6 +392,62 @@ async function runBrowserSuite() {
     assertCheck('Zero uncaught page exceptions', uncaughtPageErrors.length === 0, uncaughtPageErrors.join('; '));
     assertCheck('Zero unexpected console errors', unexpectedErrors.length === 0, unexpectedErrors.join('; '));
 
+    // -------------------------------------------------------------
+    // Phase 9: Failure Injection API + Demo Story API (REST)
+    // -------------------------------------------------------------
+    console.log('\n--- Phase 9: Failure Injection API & Demo Story API ---');
+
+    const tokenVal = await page.evaluate(() => localStorage.getItem('medbed_token'));
+    const authHeader = { 'Authorization': `Bearer ${tokenVal}`, 'Content-Type': 'application/json' };
+
+    // 9a. GET /api/care/failure-injection/status returns gateway state
+    const fiStatusRes = await page.evaluate(async (hdr) => {
+      const r = await fetch('/api/care/failure-injection/status', { headers: hdr });
+      return { status: r.status, json: await r.json() };
+    }, authHeader);
+    assertCheck('Failure injection status endpoint returns 200', fiStatusRes.status === 200);
+    assertCheck('Failure injection status includes isOnline field', 'isOnline' in (fiStatusRes.json.data || {}));
+
+    // 9b. POST pause_sensor, check isSensorPaused, then reset
+    const pauseRes = await page.evaluate(async (hdr) => {
+      const r = await fetch('/api/care/failure-injection', {
+        method: 'POST',
+        headers: hdr,
+        body: JSON.stringify({ action: 'pause_sensor', patientId: 'all' }),
+      });
+      return { status: r.status, json: await r.json() };
+    }, authHeader);
+    assertCheck('pause_sensor returns 200', pauseRes.status === 200 || pauseRes.json.success === true);
+    assertCheck('pause_sensor sets paused=true', pauseRes.json.paused === true);
+
+    const resetRes = await page.evaluate(async (hdr) => {
+      const r = await fetch('/api/care/failure-injection', {
+        method: 'POST', headers: hdr,
+        body: JSON.stringify({ action: 'reset' }),
+      });
+      return { status: r.status, json: await r.json() };
+    }, authHeader);
+    assertCheck('reset_faults returns 200', resetRes.status === 200);
+    assertCheck('reset_faults clears paused state', resetRes.json.status?.isSensorPaused === false);
+
+    // 9c. GET /api/health/ready includes buffer and socket checks
+    const healthRes = await page.evaluate(async (hdr) => {
+      const r = await fetch('/api/health/ready', { headers: hdr });
+      return { status: r.status, json: await r.json() };
+    }, authHeader);
+    assertCheck('/api/health/ready returns 200', healthRes.status === 200);
+    assertCheck('/api/health/ready includes socket check', 'socket' in (healthRes.json.checks || {}));
+    assertCheck('/api/health/ready includes buffer check', 'buffer' in (healthRes.json.checks || {}));
+    assertCheck('Socket status is up', healthRes.json.checks?.socket?.status === 'up');
+
+    // 9d. GET /api/care/demo/story/status returns demo state
+    const demoStatusRes = await page.evaluate(async (hdr) => {
+      const r = await fetch('/api/care/demo/story/status', { headers: hdr });
+      return { status: r.status, json: await r.json() };
+    }, authHeader);
+    assertCheck('Demo story status endpoint returns 200', demoStatusRes.status === 200);
+    assertCheck('Demo story status includes isRunning field', 'isRunning' in (demoStatusRes.json.data || {}));
+
   } finally {
     await context.close();
     await browser.close();

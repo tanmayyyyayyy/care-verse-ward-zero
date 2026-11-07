@@ -1,6 +1,7 @@
 'use strict';
 
 const axios = require('axios');
+const aiService = require('./aiService');
 const Patient = require('../models/Patient');
 const Vitals = require('../models/Vitals');
 const Note = require('../models/Note');
@@ -107,6 +108,7 @@ const ruleTrendFallback = ({ readings = [], baseline = {}, patientContext = {}, 
     source: 'rule',
     safetyNotice: 'Experimental — synthetic data only. Rule-based trend projection (AI microservice offline).',
     fallbackReason: errorReason,
+    fallbackActive: true,
   };
 };
 
@@ -159,6 +161,16 @@ const predictTrend = async ({
     bpSystolic: readings[0].bpSystolic,
     respiratoryRate: readings[0].respiratoryRate || 16,
   };
+
+  // Check if AI service is simulated down by failure injection
+  if (aiService && typeof aiService.isSimulatedDown === 'function' && aiService.isSimulatedDown()) {
+    return ruleTrendFallback({
+      readings,
+      baseline: effectiveBaseline,
+      patientContext,
+      errorReason: 'AI service simulated failure (injected fault)',
+    });
+  }
 
   // Prepare payload for AI microservice
   const t0 = new Date(readings[0].observedAt || readings[0].recordedAt || Date.now()).getTime();
@@ -229,7 +241,10 @@ const predictTrend = async ({
  * Orchestrates fetching recent readings, evaluating trend risk, persisting to Patient,
  * emitting over Socket.IO, and raising / resolving deduplicated deterioration alerts.
  */
-const assessAndSyncPatientTrend = async ({ patient, io = null, actor = null }) => {
+const assessAndSyncPatientTrend = async (optionsOrPatient, maybeIo = null, maybeActor = null) => {
+  const patient = optionsOrPatient?.patient || (optionsOrPatient?._id ? optionsOrPatient : null);
+  const io = optionsOrPatient?.io !== undefined ? optionsOrPatient.io : maybeIo;
+  const actor = optionsOrPatient?.actor !== undefined ? optionsOrPatient.actor : maybeActor;
   if (!patient || !patient._id) return null;
 
   // Load up to 48 recent continuous non-late readings

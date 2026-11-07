@@ -46,4 +46,19 @@ router.post(
 );
 router.post('/gateway/reset', authorize('admin', 'doctor'), care.resetGateway);
 
+// Failure injection panel (admin / doctor only, synthetic mode only)
+router.get('/failure-injection/status', care.getFailureStatus);
+router.post(
+  '/failure-injection',
+  authorize('admin', 'doctor'),
+  body('action').isString().trim().notEmpty().withMessage('Failure injection action is required'),
+  validate,
+  care.injectFailure
+);
+
+// Demo scenario runner (3-minute scripted story: Sense → Understand → Predict → Alert → Respond)
+router.post('/demo/story', authorize('admin', 'doctor'), care.runDemoStory);
+router.get('/demo/story/status', care.getDemoStatus);
+router.post('/demo/story/cancel', authorize('admin', 'doctor'), care.cancelDemo);
+
 module.exports = router;
