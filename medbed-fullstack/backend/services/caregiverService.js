@@ -261,8 +261,8 @@ const getRoster = async ({ now = Date.now() } = {}) => {
       unresponsive: onDuty.filter((c) => c.presence === 'unresponsive').length,
       covered,
       note: covered
-        ? 'At least one caregiver is checked in.'
-        : 'No caregiver is checked in. Unacknowledged alerts will escalate beyond the care team.',
+        ? 'At least one staff member is checked in.'
+        : 'No staff is checked in. Unacknowledged alerts will escalate beyond the care team.',
     },
     thresholds: { idleMinutes: IDLE_MINUTES, unresponsiveMinutes: UNRESPONSIVE_MINUTES },
     metrics: {

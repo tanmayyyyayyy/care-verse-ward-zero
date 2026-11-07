@@ -117,7 +117,7 @@
             badge.textContent= 'WARNING';
           } else {
             badge.className  = 'cb cb-green';
-            badge.textContent= 'SAFE';
+            badge.textContent= 'NORMAL';
           }
         }
       }
@@ -168,10 +168,10 @@
       const sub   = tsBox.querySelector('.ts-sub');
       const ico   = tsBox.querySelector('.ts-ico');
       if (title) title.textContent = recommendation === 'proceed'
-        ? 'Safe to Transfer'
+        ? 'Monitoring stable'
         : recommendation === 'proceed_with_caution'
-          ? 'Proceed with Caution'
-          : 'Delay Transfer Recommended';
+          ? 'Needs clinical review'
+          : 'Escalate to clinician';
       if (sub) sub.textContent = `ML: ${risk_label} risk · ~${Math.round(estimated_minutes)} min · ${staff_count} staff needed`;
       if (ico) ico.textContent = risk_level === 2 ? '🛑' : risk_level === 1 ? '⏸' : '✅';
     }

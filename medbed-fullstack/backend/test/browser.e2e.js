@@ -305,7 +305,7 @@ async function runBrowserSuite() {
       assertCheck('ECG status reports NO DATA', ecgTag.includes('NO DATA'));
 
       const transferTitle = await page.textContent('#aiTransferTitle');
-      assertCheck('No-data patient does NOT claim stability (reports Reassess Before Transfer)', !transferTitle.toLowerCase().includes('safe') && transferTitle.includes('Reassess'));
+      assertCheck('No-data patient does NOT claim stability (reports Needs clinical review)', !transferTitle.toLowerCase().includes('safe') && transferTitle.includes('Needs clinical review'));
     }
 
     // Safe Cleanup: Delete or deactivate temporary patient
@@ -348,7 +348,7 @@ async function runBrowserSuite() {
 
     const caregiverCard = page.locator('#wzDashCaregiverCard');
     await caregiverCard.waitFor({ timeout: 5000 });
-    assertCheck('Dashboard renders Caregivers On Duty card', (await caregiverCard.count()) > 0);
+    assertCheck('Dashboard renders Staff on Duty card', (await caregiverCard.count()) > 0);
 
     const dashCheckIn = page.locator('#wzDashCheckIn');
     await dashCheckIn.click();
@@ -447,6 +447,119 @@ async function runBrowserSuite() {
     }, authHeader);
     assertCheck('Demo story status endpoint returns 200', demoStatusRes.status === 200);
     assertCheck('Demo story status includes isRunning field', 'isRunning' in (demoStatusRes.json.data || {}));
+
+    // -------------------------------------------------------------
+    // Phase 10: Role Security, Buffer Replay & Sensor Staleness
+    // -------------------------------------------------------------
+    console.log('\n--- Phase 10: Role Security, Buffer Replay & Sensor Staleness ---');
+
+    // 10a. Nurse role receives 403 Forbidden on failure injection and demo story endpoints
+    const nurseLoginRes = await page.request.post(`${BASE_URL}/api/auth/login`, {
+      data: { email: 'nurse@careverse.com', password: DEMO_PASSWORD },
+    });
+    const nurseLoginData = await nurseLoginRes.json();
+    const nurseHdr = {
+      'Authorization': `Bearer ${nurseLoginData.token}`,
+      'Content-Type': 'application/json',
+    };
+
+    const nurseFIRes = await page.request.post(`${BASE_URL}/api/care/failure-injection`, {
+      headers: nurseHdr,
+      data: { action: 'pause_sensor' },
+    });
+    assertCheck('Nurse receives 403 Forbidden from failure-injection endpoint', nurseFIRes.status() === 403);
+
+    const nurseDemoRes = await page.request.post(`${BASE_URL}/api/care/demo/story`, {
+      headers: nurseHdr,
+      data: { fast: true },
+    });
+    assertCheck('Nurse receives 403 Forbidden from demo-story endpoint', nurseDemoRes.status() === 403);
+
+    // 10b. Drop Network + several readings -> buffer depth > 0; Reconnect -> drains to 0 with no duplicate readings
+    const dropRes = await page.request.post(`${BASE_URL}/api/care/failure-injection`, {
+      headers: authHeader,
+      data: { action: 'simulate_network_drop' },
+    });
+    const dropData = await dropRes.json();
+    assertCheck('Drop network returns 200', dropRes.status() === 200);
+    assertCheck('Network drops to offline', dropData.status?.isOnline === false);
+
+    // Get an active patient for ingestion test
+    const ptsListRes = await page.request.get(`${BASE_URL}/api/patients`, { headers: authHeader });
+    const ptsList = (await ptsListRes.json()).data || [];
+    const targetPt = ptsList[0];
+
+    // Emit 2 readings via gateway while offline
+    const emitOffRes = await page.request.post(`${BASE_URL}/api/care/gateway/emit`, {
+      headers: authHeader,
+      data: { patientId: targetPt._id, scenario: 'stable', steps: 2 },
+      timeout: 60000,
+    });
+    assertCheck('Gateway scenario emit accepts readings while offline', emitOffRes.status() === 202);
+
+    const bufStatusRes = await page.request.get(`${BASE_URL}/api/care/failure-injection/status`, { headers: authHeader, timeout: 60000 });
+    const bufStatus = (await bufStatusRes.json()).data || {};
+    assertCheck('Replay buffer depth rises above 0 while network is offline', bufStatus.queueLength >= 2);
+
+    // Reconnect network & trigger replay
+    const reconnectRes = await page.request.post(`${BASE_URL}/api/care/failure-injection`, {
+      headers: authHeader,
+      data: { action: 'reconnect_network' },
+      timeout: 60000,
+    });
+    assertCheck('Reconnect network returns 200', reconnectRes.status() === 200);
+
+    // Allow replay to drain buffer
+    await page.waitForTimeout(3000);
+    const drainedStatusRes = await page.request.get(`${BASE_URL}/api/care/failure-injection/status`, { headers: authHeader, timeout: 60000 });
+    const drainedStatus = (await drainedStatusRes.json()).data || {};
+    assertCheck('Buffer drains back to 0 upon reconnection', drainedStatus.queueLength === 0);
+    assertCheck('Gateway returns to online state', drainedStatus.isOnline === true);
+
+    // Verify no duplicate reading IDs in patient vitals
+    const vitalsRes = await page.request.get(`${BASE_URL}/api/patients/${targetPt._id}/vitals?limit=500`, { headers: authHeader });
+    const vitalsData = (await vitalsRes.json()).data || [];
+    const readingIds = vitalsData.map((v) => v.readingId).filter(Boolean);
+    const uniqueIds = new Set(readingIds);
+    assertCheck('No duplicate readings in patient vitals history after replay', readingIds.length === uniqueIds.size);
+
+    // 10c. Pause sensor and wait for stale threshold; verify patient is shown as stale/offline and never stable
+    await page.click('#nav-dashboard');
+    await page.waitForSelector('#page-dashboard.active', { timeout: 3000 });
+
+    const pauseSensorRes = await page.request.post(`${BASE_URL}/api/care/failure-injection`, {
+      headers: authHeader,
+      data: { action: 'pause_sensor', patientId: 'all' },
+    });
+    assertCheck('Sensor paused for all patients', pauseSensorRes.status() === 200);
+
+    console.log('Waiting for sensor staleness threshold (62 seconds)...');
+    await page.waitForTimeout(62000);
+
+    // Refresh dashboard live state
+    await page.evaluate(async () => {
+      if (typeof refreshLiveState === 'function') {
+        await refreshLiveState();
+      }
+    });
+    await page.waitForTimeout(1500);
+
+    const liveBadgeText = await page.textContent('#liveConnectionBadge');
+    assertCheck('Dashboard connection badge reports STALE or OFFLINE', liveBadgeText.includes('STALE') || liveBadgeText.includes('OFFLINE'));
+    assertCheck('Dashboard connection badge does NOT report LIVE or STABLE data', !liveBadgeText.includes('Data: LIVE') && !liveBadgeText.includes('Data: STABLE'));
+
+    const riskBadgeText = await page.textContent('#riskBadge');
+    assertCheck('Risk badge reports REASSESS / STALE (never safe or stable)', !riskBadgeText.toLowerCase().includes('safe') && !riskBadgeText.toLowerCase().includes('stable') && (riskBadgeText.includes('REASSESS') || riskBadgeText.includes('UNKNOWN')));
+
+    const decisionTitle = await page.textContent('#aiTransferTitle');
+    assertCheck('Clinical decision title reports Needs clinical review (never safe)', !decisionTitle.toLowerCase().includes('safe') && decisionTitle.includes('Needs clinical review'));
+
+    // Resume sensor and reset failure injection faults
+    const resumeSensorRes = await page.request.post(`${BASE_URL}/api/care/failure-injection`, {
+      headers: authHeader,
+      data: { action: 'reset' },
+    });
+    assertCheck('Sensor resumed and all faults reset', resumeSensorRes.status() === 200);
 
   } finally {
     await context.close();

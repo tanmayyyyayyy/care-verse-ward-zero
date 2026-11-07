@@ -901,7 +901,7 @@ tr:hover td{background:var(--blue-50);}
           <div class="ts-box delay" id="aiTransferBox" style="margin-top:8px;">
             <div class="ts-ico">⏸</div>
             <div>
-              <div class="ts-title" id="aiTransferTitle">Delay Transfer</div>
+              <div class="ts-title" id="aiTransferTitle">Needs clinical review</div>
               <div class="ts-sub" id="aiTransferSub">Awaiting assessment</div>
             </div>
           </div>
@@ -920,7 +920,7 @@ tr:hover td{background:var(--blue-50);}
       </div>
       <div class="dash-col">
         <div class="card">
-          <div class="ch"><span class="ct">Live Vitals During Transfer</span><div class="live-pill" style="font-size:10px;"><div class="live-dot"></div>REAL-TIME</div></div>
+          <div class="ch"><span class="ct">Live Bedroom Vitals</span><div class="live-pill" style="font-size:10px;"><div class="live-dot"></div>REAL-TIME</div></div>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
             <div style="background:var(--gray-50);border-radius:var(--r-sm);padding:12px;border:1px solid var(--gray-200);" id="hrVcCard">
               <div style="font-size:10px;font-weight:600;color:var(--gray-500);letter-spacing:.4px;">HEART RATE</div>
@@ -1142,7 +1142,7 @@ tr:hover td{background:var(--blue-50);}
             </div>
             <div class="dt-stability-card">
               <div class="dt-stability-header">
-                <span class="dt-stability-label">Transfer Stability Risk</span>
+                <span class="dt-stability-label">Patient Stability Risk</span>
                 <span class="dt-stability-badge low" id="dtStabilityBadge">LOW</span>
               </div>
               <div class="dt-gauge-wrap" style="height:16px;position:relative;">
@@ -1312,10 +1312,10 @@ tr:hover td{background:var(--blue-50);}
         </div>
         <div class="card">
           <div class="ch"><span class="ct">Synthetic Sensor Scenarios</span><span class="cb cb-yellow">Demo Only</span></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-            <button class="filter-btn active" onclick="runSensorScenario('stable',this)">Stable</button>
-            <button class="filter-btn" onclick="runSensorScenario('slow_decline',this)">Slow decline</button>
-            <button class="filter-btn" onclick="runSensorScenario('sudden_drop',this)">Sudden drop</button>
+          <div id="simScenarioBtnGroup" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            <button class="filter-btn active" id="btnSimStable" onclick="runSensorScenario('stable',this)" disabled>Loading live patient data...</button>
+            <button class="filter-btn" id="btnSimSlowDecline" onclick="runSensorScenario('slow_decline',this)" disabled style="display:none;">Slow decline</button>
+            <button class="filter-btn" id="btnSimSuddenDrop" onclick="runSensorScenario('sudden_drop',this)" disabled style="display:none;">Sudden drop</button>
           </div>
           <div id="scenarioResult" style="font-size:10px;line-height:1.5;color:var(--gray-500);">Injects synthetic readings through the real ingestion API, AI assessment, alerts, Socket.IO, and audit log.</div>
           <div style="margin-top:8px;font-size:9px;color:var(--text-light);">Rules and experimental classifier only. Not clinical validation.</div>
@@ -1555,13 +1555,13 @@ const PATIENTS=[
   {id:'PT-001',name:'Arjun Kapoor',age:67,gender:'M',emoji:'👤',condition:'Cardiac Emergency',condType:'cardiac',hr:128,spo2:89,bp:'148/96',rr:24,ecgType:'tachy',selectedScale:'Killip',scaleScore:'III',apacheII:22,qsofa:2,killip:'III',gcs:null,curb65:null,transferRisk:'critical_not_safe',transferMode:'icu-smart-bed',priority:1,routeStatus:'In Transit',from:'CCU Ward 2',to:'Cardiac ICU F3',via:'Elevator C',eta:'8 min',aiDecision:'BLOCK TRANSFER — Killip III + APACHE II 22 + qSOFA 2. Patient hemodynamically unstable.',intraPrecs:['🏥 ICU Smart Bed mandatory','💗 Continuous 12-lead ECG','🔌 Defibrillator standby','👨‍⚕️ Cardiologist escort required'],interPrecs:['🚑 ALS ambulance with cardiac monitor','💗 12-lead ECG throughout transport','⚡ Portable defibrillator on board'],escortTeam:['Cardiologist (MANDATORY)','ICU Nurse x2','Paramedic with defibrillator']},
   {id:'PT-002',name:'Meera Nair',age:45,gender:'F',emoji:'👩',condition:'Neuro — Head Injury',condType:'neuro',hr:72,spo2:97,bp:'138/88',rr:16,ecgType:'normal',selectedScale:'GCS',scaleScore:'7',gcs:7,apacheII:null,qsofa:null,killip:null,curb65:null,transferRisk:'critical_not_safe',transferMode:'neuro-stretcher',priority:1,routeStatus:'Delayed',from:'NeuroEmergency',to:'Neuro ICU F5',via:'Elevator A',eta:'15 min',aiDecision:'CRITICAL — GCS 7 (≤8). Intubation protocol active.',intraPrecs:['🧠 Cervical spine stabilization MUST','🛏 Head elevated 30° at all times','🚫 Avoid vibration and sudden jerks'],interPrecs:['🚑 Critical care ambulance with neuro-monitoring','🏥 Neurosurgery unit pre-alerted'],escortTeam:['Neurosurgeon','ICU Nurse','Anesthesiologist']},
   {id:'PT-003',name:'Vikram Singh',age:58,gender:'M',emoji:'🧑',condition:'Sepsis — Multi-organ',condType:'sepsis',hr:118,spo2:91,bp:'88/56',rr:28,ecgType:'tachy',selectedScale:'qSOFA',scaleScore:'3',qsofa:3,apacheII:26,gcs:null,killip:null,curb65:null,transferRisk:'critical_not_safe',transferMode:'icu-smart-bed',priority:1,routeStatus:'Blocked',from:'Ward 4A',to:'Sepsis ICU F4',via:'Elevator B',eta:'BLOCKED',aiDecision:'DELAY TRANSFER — qSOFA 3 + APACHE II 26. Hemodynamic resuscitation needed first.',intraPrecs:['💉 IV fluid resuscitation in progress','💊 Vasopressors running — do NOT interrupt'],interPrecs:['🚑 ALS ambulance only','💉 IV access x2 before transport'],escortTeam:['ICU Specialist','Senior Nurse','Pharmacist']},
-  {id:'PT-007',name:'Karan Malhotra',age:48,gender:'M',emoji:'🧑',condition:'Post Cardiac Surgery',condType:'cardiac',hr:88,spo2:96,bp:'124/76',rr:18,ecgType:'normal',selectedScale:'Killip',scaleScore:'I',killip:'I',apacheII:12,qsofa:1,gcs:null,curb65:null,transferRisk:'safe_to_transfer',transferMode:'icu-smart-bed',priority:3,routeStatus:'Cleared',from:'Cardiac ICU',to:'Step-Down Ward 6A',via:'Elevator C',eta:'12 min',aiDecision:'SAFE TO TRANSFER — Killip I + APACHE II 12.',intraPrecs:['💗 Continuous ECG monitoring','🏥 ICU smart bed with monitoring'],interPrecs:['🚑 ALS ambulance if inter-hospital'],escortTeam:['Cardiac Nurse','Ward Nurse']},
+  {id:'PT-007',name:'Karan Malhotra',age:48,gender:'M',emoji:'🧑',condition:'Post Cardiac Surgery',condType:'cardiac',hr:88,spo2:96,bp:'124/76',rr:18,ecgType:'normal',selectedScale:'Killip',scaleScore:'I',killip:'I',apacheII:12,qsofa:1,gcs:null,curb65:null,transferRisk:'safe_to_transfer',transferMode:'icu-smart-bed',priority:3,routeStatus:'Cleared',from:'Cardiac ICU',to:'Step-Down Ward 6A',via:'Elevator C',eta:'12 min',aiDecision:'MONITORING STABLE — Killip I + APACHE II 12.',intraPrecs:['💗 Continuous ECG monitoring','🏥 ICU smart bed with monitoring'],interPrecs:['🚑 ALS ambulance if inter-hospital'],escortTeam:['Cardiac Nurse','Ward Nurse']},
   {id:'PT-004',name:'Anita Patel',age:35,gender:'F',emoji:'👩',condition:'Trauma — Critical',condType:'trauma',hr:134,spo2:86,bp:'82/50',rr:32,ecgType:'tachy',selectedScale:'APACHE II',scaleScore:'24',apacheII:24,qsofa:3,gcs:null,killip:null,curb65:null,transferRisk:'critical_not_safe',transferMode:'als-ambulance',priority:1,routeStatus:'Emergency',from:'Trauma Bay',to:'OT Emergency F1',via:'Direct Route',eta:'3 min',aiDecision:'IMMEDIATE TRANSFER — APACHE II 24 + qSOFA 3.',intraPrecs:['🚨 EMERGENCY TRANSFER — CLEAR ALL ROUTES','💉 Active hemorrhage control'],interPrecs:['🚑 ONLY Level-1 Trauma Center transfer','🩸 Blood products in ambulance'],escortTeam:['Trauma Surgeon (MANDATORY)','Anesthesiologist','2x Trauma Nurses']},
   {id:'PT-005',name:'Rajesh Mehra',age:62,gender:'M',emoji:'🧑',condition:'Pneumonia — Severe',condType:'respiratory',hr:106,spo2:88,bp:'136/84',rr:26,ecgType:'tachy',selectedScale:'CURB-65',scaleScore:'4',curb65:4,qsofa:2,gcs:null,apacheII:null,killip:null,transferRisk:'delay_transfer',transferMode:'als-ambulance',priority:2,routeStatus:'Monitoring',from:'Ward 3B',to:'Respiratory ICU F2',via:'Elevator D',eta:'10 min',aiDecision:'DELAY TRANSFER — CURB-65 Score 4.',intraPrecs:['🫁 Portable ventilator attached','💨 Oxygen cylinder 15L/min'],interPrecs:['🚑 Critical care ambulance with ventilator'],escortTeam:['Pulmonologist','Respiratory Therapist','ICU Nurse']},
   {id:'PT-006',name:'Sunita Devi',age:54,gender:'F',emoji:'👩',condition:'Respiratory Distress',condType:'respiratory',hr:114,spo2:84,bp:'128/80',rr:34,ecgType:'tachy',selectedScale:'qSOFA',scaleScore:'3',qsofa:3,curb65:3,gcs:null,apacheII:null,killip:null,transferRisk:'critical_not_safe',transferMode:'critical-care-amb',priority:1,routeStatus:'Critical Watch',from:'ER Bay 2',to:'Respiratory ICU F2',via:'Elevator B',eta:'DELAYED',aiDecision:'BLOCK — qSOFA 3 + SpO₂ 84%.',intraPrecs:['🚨 INTUBATION CONSIDERATION NOW','💨 BiPAP/CPAP before transfer'],interPrecs:['🚑 Critical care ambulance ONLY','🫁 Mechanical ventilator running in ambulance'],escortTeam:['Anesthesiologist','Respiratory Therapist','ICU Nurse']},
   {id:'PT-008',name:'Priya Sharma',age:42,gender:'F',emoji:'👩',condition:'Stroke — Ischemic',condType:'neuro',hr:82,spo2:95,bp:'168/102',rr:18,ecgType:'normal',selectedScale:'GCS',scaleScore:'10',gcs:10,apacheII:null,qsofa:null,killip:null,curb65:null,transferRisk:'delay_transfer',transferMode:'neuro-stretcher',priority:1,routeStatus:'Monitoring',from:'Stroke Unit',to:'Neuro ICU F5',via:'Elevator A',eta:'8 min',aiDecision:'DELAY TRANSFER — GCS 10 (Moderate).',intraPrecs:['🧠 Head elevation 30° mandatory','🚫 Avoid sudden position changes'],interPrecs:['🚑 Stroke-capable ambulance'],escortTeam:['Neurologist','ICU Nurse']},
   {id:'PT-009',name:'Mohan Das',age:71,gender:'M',emoji:'🧓',condition:'ICU Unstable — Multi',condType:'sepsis',hr:122,spo2:87,bp:'80/50',rr:30,ecgType:'arrhythmia',selectedScale:'APACHE II',scaleScore:'28',apacheII:28,qsofa:3,gcs:null,killip:null,curb65:null,transferRisk:'critical_not_safe',transferMode:'icu-smart-bed',priority:1,routeStatus:'Blocked',from:'ICU Bed 7',to:'High Dependency ICU',via:'BLOCKED',eta:'BLOCKED',aiDecision:'DO NOT TRANSFER — APACHE II 28.',intraPrecs:['🚨 DO NOT TRANSFER until stabilized','💉 Active resuscitation in progress'],interPrecs:['🚨 ABSOLUTE CONTRAINDICATION — APACHE II 28'],escortTeam:['Senior ICU Consultant','Intensivist','2x ICU Nurses']},
-  {id:'PT-010',name:'Radha Krishnan',age:38,gender:'F',emoji:'👩',condition:'Ortho Trauma — Poly',condType:'trauma',hr:94,spo2:97,bp:'118/74',rr:16,ecgType:'normal',selectedScale:'APACHE II',scaleScore:'10',apacheII:10,qsofa:1,gcs:null,killip:null,curb65:null,transferRisk:'safe_to_transfer',transferMode:'stretcher',priority:3,routeStatus:'Scheduled',from:'Ortho Ward 2B',to:'OT Floor 1',via:'Elevator B',eta:'15 min',aiDecision:'SAFE TO TRANSFER — APACHE II 10.',intraPrecs:['🦴 Fracture stabilization confirmed','💊 Pain management IV running'],interPrecs:['🚑 Standard ambulance sufficient'],escortTeam:['Ortho Nurse','Technician']},
+  {id:'PT-010',name:'Radha Krishnan',age:38,gender:'F',emoji:'👩',condition:'Ortho Trauma — Poly',condType:'trauma',hr:94,spo2:97,bp:'118/74',rr:16,ecgType:'normal',selectedScale:'APACHE II',scaleScore:'10',apacheII:10,qsofa:1,gcs:null,killip:null,curb65:null,transferRisk:'safe_to_transfer',transferMode:'stretcher',priority:3,routeStatus:'Scheduled',from:'Ortho Ward 2B',to:'OT Floor 1',via:'Elevator B',eta:'15 min',aiDecision:'MONITORING STABLE — APACHE II 10.',intraPrecs:['🦴 Fracture stabilization confirmed','💊 Pain management IV running'],interPrecs:['🚑 Standard ambulance sufficient'],escortTeam:['Ortho Nurse','Technician']},
 ];
  
 const CONDITION_SCALES={
@@ -1780,7 +1780,7 @@ function updateRiskDisplay(riskLevel,quality){
   if(riskLevel==='unknown'){pin.style.left='50%';badge.style.background='var(--gray-100)';badge.style.color='var(--gray-700)';badge.textContent=quality==='no_data'?'UNKNOWN — NO DATA':'REASSESS — DATA '+(quality||'UNKNOWN').toUpperCase();}
   else if(riskLevel==='critical_not_safe'){pin.style.left='85%';badge.style.background='var(--red-bg)';badge.style.color='var(--red)';badge.textContent='CRITICAL RISK';}
   else if(riskLevel==='delay_transfer'){pin.style.left='55%';badge.style.background='var(--yellow-bg)';badge.style.color='var(--yellow)';badge.textContent='MEDIUM RISK';}
-  else{pin.style.left='18%';badge.style.background='var(--green-bg)';badge.style.color='var(--green)';badge.textContent='LOW RISK — SAFE';}
+  else{pin.style.left='18%';badge.style.background='var(--green-bg)';badge.style.color='var(--green)';badge.textContent='LOW RISK — BASELINE';}
 }
  
 function renderScales(pt,activeScales){
@@ -1800,10 +1800,10 @@ function updateAIDecisionBox(pt){
   else if(pt.transferRisk==='delay_transfer'){cls='delay';ico='⏳';col='#9A3412';}
   else{cls='safe';ico='✅';col='#065F46';}
   box.className='ai-decision-box '+cls;if(icon)icon.textContent=ico;
-  if(label){label.style.color=col;label.textContent=pt.transferRisk==='unknown'?(pt.dataQuality==='no_data'?'UNKNOWN — NO DATA':'REASSESS — DATA NOT CURRENT'):pt.transferRisk==='critical_not_safe'?'BLOCK / DO NOT TRANSFER':pt.transferRisk==='delay_transfer'?'DELAY — STABILISE FIRST':'SAFE TO TRANSFER';}
+  if(label){label.style.color=col;label.textContent=pt.transferRisk==='unknown'?(pt.dataQuality==='no_data'?'UNKNOWN — NO DATA':'REASSESS — DATA NOT CURRENT'):pt.transferRisk==='critical_not_safe'?'ESCALATE TO CLINICIAN':pt.transferRisk==='delay_transfer'?'NEEDS CLINICAL REVIEW':'MONITORING STABLE';}
   if(reason){reason.style.color=col;reason.textContent=pt.transferRisk==='unknown'?'No current reading supports a transfer decision. Obtain a fresh assessment before proceeding.':pt.aiDecision;}
   const tb=document.getElementById('aiTransferBox'),tt=document.getElementById('aiTransferTitle'),ts=document.getElementById('aiTransferSub');
-  if(tb&&tt&&ts){if(pt.transferRisk==='unknown'){tb.className='ts-box delay';tt.textContent='Reassess Before Transfer';ts.textContent='Current state unknown';}else if(pt.transferRisk==='critical_not_safe'){tb.className='ts-box blocked';tt.textContent='BLOCK TRANSFER';ts.textContent=pt.aiDecision.split('.')[0];}else if(pt.transferRisk==='delay_transfer'){tb.className='ts-box delay';tt.textContent='Delay Transfer';ts.textContent=pt.aiDecision.split('.')[0];}else{tb.className='ts-box safe';tt.textContent='Safe to Transfer';ts.textContent='All scales within limits';}}
+  if(tb&&tt&&ts){if(pt.transferRisk==='unknown'){tb.className='ts-box delay';tt.textContent='Needs clinical review';ts.textContent='Current state unknown';}else if(pt.transferRisk==='critical_not_safe'){tb.className='ts-box blocked';tt.textContent='Escalate to clinician';ts.textContent=pt.aiDecision.split('.')[0];}else if(pt.transferRisk==='delay_transfer'){tb.className='ts-box delay';tt.textContent='Needs clinical review';ts.textContent=pt.aiDecision.split('.')[0];}else{tb.className='ts-box safe';tt.textContent='Monitoring stable';ts.textContent='All scales within limits';}}
 }
  
 function updateTransferMode(pt){
@@ -1921,7 +1921,7 @@ function renderPatientsTable(filter){
     const ptIdx=PATIENTS.indexOf(pt);
     const riskColor=pt.transferRisk==='unknown'?'rb-med':pt.transferRisk==='critical_not_safe'?'rb-high':pt.transferRisk==='delay_transfer'?'rb-med':'rb-low';
     const statusPill=pt.routeStatus==='Blocked'||pt.routeStatus==='Emergency'?'sp-crit':pt.routeStatus==='In Transit'?'sp-transit':pt.routeStatus==='Completed'||pt.routeStatus==='Cleared'?'sp-completed':'sp-warn';
-    const dec=pt.transferRisk==='unknown'?'⚠ No Data':pt.transferRisk==='critical_not_safe'?'🚨 Block':pt.transferRisk==='delay_transfer'?'⏳ Delay':'✅ Safe';
+    const dec=pt.transferRisk==='unknown'?'⚠ No Data':pt.transferRisk==='critical_not_safe'?'🚨 Block':pt.transferRisk==='delay_transfer'?'⏳ Delay':'✅ Normal';
     const activeScale=pt.condType==='neuro'?'GCS':pt.condType==='cardiac'?'Killip':pt.condType==='respiratory'?'CURB-65':'APACHE II';
     const scVal=pt.gcs||pt.killip||pt.curb65||pt.apacheII||pt.qsofa||'—';
     // Admin-only delete button
@@ -2031,7 +2031,7 @@ function runSimulation(){
   const delay=parseInt(document.getElementById('delayParam').value);
   const hr=parseInt(document.getElementById('hrParam').value);
   const spo2=parseInt(document.getElementById('spo2Param').value);
-  const results=[{scenario:'Immediate Transfer',risk:pt.transferRisk==='unknown'?'mod':pt.transferRisk==='critical_not_safe'?'high':'safe',label:pt.transferRisk==='unknown'?'⚠ Reassess':pt.transferRisk==='critical_not_safe'?'🔴 High Risk':'🟢 Acceptable'},{scenario:'Transfer after '+delay+' min delay',risk:delay<10?'high':'mod',label:delay<10?'🔴 Too Soon':'🟡 Moderate'},{scenario:'HR '+hr+' bpm during transfer',risk:hr>130||hr<50?'high':'mod',label:hr>130||hr<50?'🔴 Dangerous':'🟡 Caution'},{scenario:'SpO₂ '+spo2+'% during route',risk:spo2<88?'high':spo2<92?'mod':'safe',label:spo2<88?'🔴 Critical':spo2<92?'🟡 Warning':'🟢 Safe'}];
+  const results=[{scenario:'Immediate Transfer',risk:pt.transferRisk==='unknown'?'mod':pt.transferRisk==='critical_not_safe'?'high':'safe',label:pt.transferRisk==='unknown'?'⚠ Reassess':pt.transferRisk==='critical_not_safe'?'🔴 High Risk':'🟢 Acceptable'},{scenario:'Transfer after '+delay+' min delay',risk:delay<10?'high':'mod',label:delay<10?'🔴 Too Soon':'🟡 Moderate'},{scenario:'HR '+hr+' bpm during transfer',risk:hr>130||hr<50?'high':'mod',label:hr>130||hr<50?'🔴 Dangerous':'🟡 Caution'},{scenario:'SpO₂ '+spo2+'% during route',risk:spo2<88?'high':spo2<92?'mod':'safe',label:spo2<88?'🔴 Critical':spo2<92?'🟡 Warning':'🟢 Normal'}];
   const simResults=document.getElementById('simResults');if(simResults)simResults.innerHTML=results.map(r=>`<div class="sim-row"><span class="sim-scenario">${r.scenario}</span><span class="sim-risk ${r.risk}">${r.label}</span></div>`).join('');
   showToast('🧪 Simulation complete for '+pt.name);
 }
@@ -2087,7 +2087,7 @@ function mapPatient(patient){
     apacheII:null,qsofa:null,killip:null,gcs:null,curb65:null,
     transferRisk,transferMode:transferRisk==='critical_not_safe'?'critical-care-amb':'stretcher',priority,
     routeStatus:transferRisk==='unknown'?'No Data':transferRisk==='critical_not_safe'?'Critical Watch':transferRisk==='delay_transfer'?'Monitoring':'Stable',
-    from:`${patient.ward||'Ward'} · ${patient.bed||'Bed'}`,to:transferRisk==='unknown'?'Awaiting Reassessment':transferRisk==='critical_not_safe'?'ICU Response Bay':'Monitoring Ward',
+    from:`${patient.ward||'Ward'} · ${patient.bed||'Bed'}`,to:transferRisk==='unknown'?'Needs Clinical Review':transferRisk==='critical_not_safe'?'ICU Response Bay':'Monitoring Ward',
     via:'Route',eta:'—',aiDecision,
     intraPrecs:transferRisk==='unknown'?['❓ No current data — do not assume stability',aiDecision,'🛡 Synthetic demo data only']:['🩺 Continuous monitoring',explanation,'🛡 Synthetic demo data only'],
     interPrecs:['🚑 Escalation requires human clinical decision','📋 Follow local protocol'],
@@ -2106,7 +2106,7 @@ function selectPatient(idx){
   hrHistory=[];spo2History=[];bpHistory=[];
   for(let i=0;i<12;i++){hrHistory.push(currentPatient.hr);spo2History.push(currentPatient.spo2);bpHistory.push(parts[0]||0);}
   if(liveSocket)liveSocket.emit('subscribe:patient',currentPatient.apiId||currentPatient._id);
-  updateDashboard();renderVitalsReadouts();updateLiveMeta();
+  updateDashboard();renderVitalsReadouts();updateLiveMeta();updateSimulationScenarioControls();
 }
 
 function applyLiveVitals(payload){
@@ -2161,6 +2161,27 @@ function updateLiveMeta(){
   if(expl)expl.textContent=currentPatient.assessmentExplanation||'No assessment explanation.';
 }
 
+function updateSimulationScenarioControls(){
+  const isReady=Boolean(window.__liveDataActive && currentPatient && currentPatient.apiId);
+  const btnStable=document.getElementById('btnSimStable');
+  const btnSlow=document.getElementById('btnSimSlowDecline');
+  const btnSudden=document.getElementById('btnSimSuddenDrop');
+  if(!btnStable)return;
+  if(isReady){
+    btnStable.disabled=false;
+    btnStable.style.display='inline-block';
+    btnStable.textContent='Stable';
+    if(btnSlow){btnSlow.disabled=false;btnSlow.style.display='inline-block';}
+    if(btnSudden){btnSudden.disabled=false;btnSudden.style.display='inline-block';}
+  }else{
+    btnStable.disabled=true;
+    btnStable.style.display='inline-block';
+    btnStable.textContent='Loading live patient data...';
+    if(btnSlow){btnSlow.disabled=true;btnSlow.style.display='none';}
+    if(btnSudden){btnSudden.disabled=true;btnSudden.style.display='none';}
+  }
+}
+
 function applyPatients(list){
   const selectedId=currentPatient?(currentPatient.apiId||currentPatient._id):null;
   PATIENTS.splice(0,PATIENTS.length,...list.map(mapPatient));
@@ -2169,6 +2190,7 @@ function applyPatients(list){
     selectPatient(selectedIndex>=0?selectedIndex:0);
     renderPatientsTable(patientFilter);
   }
+  updateSimulationScenarioControls();
 }
 
 function applyAlerts(alerts,summary){
@@ -2218,8 +2240,11 @@ async function refreshLiveState(){
 }
 
 async function runSensorScenario(scenario,btn){
-  const targetId=currentPatient?.apiId||currentPatient?._id;
-  if(!currentPatient||!targetId){showToast('❌ No patient selected');return;}
+  if(!window.__liveDataActive || !currentPatient || !currentPatient.apiId){
+    showToast('❌ Loading live patient data... Please wait');
+    return;
+  }
+  const targetId=currentPatient.apiId;
   document.querySelectorAll('#page-simulation .filter-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   const result=document.getElementById('scenarioResult');

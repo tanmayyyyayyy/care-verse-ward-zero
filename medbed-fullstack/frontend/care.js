@@ -171,7 +171,7 @@
       },
       {
         verb: 'Respond',
-        val: onDuty ? `${onDuty} caregiver${onDuty > 1 ? 's' : ''} on duty` : 'No caregiver checked in',
+        val: onDuty ? `${onDuty} staff on duty` : 'No staff checked in',
         sub: metrics ? `Median response ${fmtMs(metrics.medianResponseMs)}` : '',
         cls: onDuty ? '' : 'bad',
       },
@@ -678,7 +678,7 @@
 
     const r = state.roster;
     if (!r) {
-      card.innerHTML = '<div class="ch"><span class="ct">Caregivers On Duty</span><span class="cb">...</span></div><div class="wz-muted" style="padding:10px;">Loading caregiver status...</div>';
+      card.innerHTML = '<div class="ch"><span class="ct">Staff on Duty</span><span class="cb">...</span></div><div class="wz-muted" style="padding:10px;">Loading staff status...</div>';
       return;
     }
     const onDutyList = r.caregivers.filter((c) => c.onDuty);
@@ -692,12 +692,12 @@
             </div>`
           )
           .join('')
-      : '<div style="color:var(--red-600);font-size:11px;padding:6px 0;">⚠ No caregiver is currently checked in!</div>';
+      : '<div style="color:var(--red-600);font-size:11px;padding:6px 0;">⚠ No staff is currently checked in!</div>';
 
     card.innerHTML = `
       <div class="ch">
-        <span class="ct">Caregivers On Duty</span>
-        <span class="cb ${onDutyList.length ? 'cb-blue' : 'cb-red'}">${onDutyList.length} ACTIVE</span>
+        <span class="ct">Staff on Duty</span>
+        <span class="cb ${onDutyList.length ? 'cb-blue' : 'cb-red'}">${onDutyList.length} STAFF ACTIVE</span>
       </div>
       <div style="margin-bottom:8px;">${items}</div>
       <div style="font-size:10px;color:var(--gray-500);margin-bottom:8px;">
