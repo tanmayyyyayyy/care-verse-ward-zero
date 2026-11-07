@@ -48,6 +48,11 @@ const patientSchema = new mongoose.Schema(
       ref: 'User',
     },
 
+    assignedCaregiver: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+
     isActive: { type: Boolean, default: true },
 
     notes: { type: String, default: '' },

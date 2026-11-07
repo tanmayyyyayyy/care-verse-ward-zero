@@ -47,7 +47,7 @@ const alertSchema = new mongoose.Schema(
         'hr_high', 'spo2_low', 'bp_high', 'bp_low', 'risk_high', 'sensor_offline',
         'data_stale', 'fall_risk', 'battery_low', 'route_change',
         'checklist_incomplete', 'escalation', 'deterioration_risk', 'caregiver_concern',
-        'other',
+        'caregiver_missed_checkin', 'other',
       ],
       required: true,
     },

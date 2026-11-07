@@ -25,6 +25,7 @@ const hospitalRoutes  = require('./routes/hospitalRoutes');
 const auditRoutes     = require('./routes/auditRoutes');
 const mlRoutes        = require('./routes/mlRoutes');
 const careRoutes      = require('./routes/careRoutes');
+const caregiverRoutes = require('./routes/caregiverRoutes');
 const deviceGateway   = require('./services/deviceGateway');
 const { initBedSensorEmitter } = require('./sockets/bedSensorEmitter');
 const { startPatientMonitor } = require('./services/patientMonitorService');
@@ -114,6 +115,7 @@ app.use('/api/hospitals',  hospitalRoutes);
 app.use('/api/audit',      auditRoutes);
 app.use('/api/ml',         mlRoutes);
 app.use('/api/care',       careRoutes);
+app.use('/api/caregivers', caregiverRoutes);
 
 // ── Health checks ────────────────────────────────────────────────────────────
 const MONGO_STATES = {

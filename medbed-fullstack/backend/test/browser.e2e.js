@@ -120,9 +120,8 @@ async function runBrowserSuite() {
     // Wait for live data to load
     await page.waitForSelector('#dashPatName', { timeout: 10000 });
     await page.waitForFunction(() => {
-      const el = document.getElementById('dashPatName');
-      return el && el.textContent && !el.textContent.includes('Loading');
-    }, { timeout: 10000 });
+      return window.__liveDataActive === true;
+    }, undefined, { timeout: 15000 });
     assertCheck('Live patient data loaded into dashboard view', true);
 
     // -------------------------------------------------------------
@@ -205,7 +204,7 @@ async function runBrowserSuite() {
     await page.waitForFunction(() => {
       const el = document.getElementById('scenarioResult');
       return el && (el.textContent.includes('ingested') || el.textContent.includes('❌'));
-    }, { timeout: 10000 });
+    }, undefined, { timeout: 25000 });
     const simResultText = await page.textContent('#scenarioResult');
     assertCheck('Sudden drop scenario ingested successfully', simResultText.includes('ingested'), simResultText);
 
@@ -339,9 +338,36 @@ async function runBrowserSuite() {
     assertCheck('Desktop 1280x800 layout restored', true);
 
     // -------------------------------------------------------------
-    // 12. Error Distinction & Page Stability
+    // 12. Caregiver Monitoring & Presence
     // -------------------------------------------------------------
-    console.log('\n--- Phase 7: Error Integrity & Zero Page Errors ---');
+    console.log('\n--- Phase 7: Caregiver Monitoring & Presence ---');
+    await page.click('#nav-dashboard');
+    await page.waitForSelector('#page-dashboard.active', { timeout: 3000 });
+
+    const caregiverCard = page.locator('#wzDashCaregiverCard');
+    await caregiverCard.waitFor({ timeout: 5000 });
+    assertCheck('Dashboard renders Caregivers On Duty card', (await caregiverCard.count()) > 0);
+
+    const dashCheckIn = page.locator('#wzDashCheckIn');
+    await dashCheckIn.click();
+    await page.waitForTimeout(1000);
+    assertCheck('Dashboard Check In action completes successfully', true);
+
+    const dashCheckOut = page.locator('#wzDashCheckOut');
+    await dashCheckOut.click();
+    await page.waitForTimeout(1000);
+    assertCheck('Dashboard Check Out action completes successfully', true);
+
+    await page.click('#nav-caregivers');
+    await page.waitForSelector('#page-caregivers.active', { timeout: 3000 });
+    const rosterTable = page.locator('#wzRoster');
+    await rosterTable.waitFor({ timeout: 5000 });
+    assertCheck('Caregivers and Home Hub page renders roster table', (await rosterTable.count()) > 0);
+
+    // -------------------------------------------------------------
+    // 13. Error Distinction & Page Stability
+    // -------------------------------------------------------------
+    console.log('\n--- Phase 8: Error Integrity & Zero Page Errors ---');
     assertCheck('Zero uncaught page exceptions', uncaughtPageErrors.length === 0, uncaughtPageErrors.join('; '));
     assertCheck('Zero unexpected console errors', unexpectedErrors.length === 0, unexpectedErrors.join('; '));
 

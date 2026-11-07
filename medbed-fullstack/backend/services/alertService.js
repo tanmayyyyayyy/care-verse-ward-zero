@@ -102,7 +102,7 @@ const createAlertsForAssessment = async ({ patient, vitals, assessment, io }) =>
     const result = await createAlert(
       {
         ...candidate,
-        assignedTo: patient?.assignedDoctor || null,
+        assignedTo: patient?.assignedCaregiver || patient?.assignedDoctor || null,
         sourceReadingId: vitals.readingId,
         metadata: {
           assessmentSource: assessment?.source || 'fallback',

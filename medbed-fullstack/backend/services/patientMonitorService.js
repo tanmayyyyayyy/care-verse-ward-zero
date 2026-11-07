@@ -5,9 +5,11 @@ const { buildDedupKey, createAlert, ACTIVE_ALERT_FILTER } = require('./alertServ
 const { assessVitalsQuality } = require('./vitalsQuality');
 const { recordAudit } = require('./auditService');
 const { countOnDuty } = require('./caregiverService');
+const CaregiverShift = require('../models/CaregiverShift');
 
 const ACK_TIMEOUT_SECONDS = Number(process.env.ALERT_ACK_TIMEOUT_SECONDS) || 300;
 const MONITOR_INTERVAL_MS = Number(process.env.PATIENT_MONITOR_INTERVAL_MS) || 15000;
+const CAREGIVER_CHECKIN_TIMEOUT_SECONDS = Number(process.env.CAREGIVER_CHECKIN_TIMEOUT_SECONDS) || 1800;
 
 const loadLatestVitals = async () => {
   const rows = await Vitals.aggregate([
@@ -83,14 +85,23 @@ const runEscalationCycle = async (io = null, now = Date.now()) => {
     if (now < dueAt) continue;
 
     const nextLevel = level + 1;
+    // Strict escalation routing: assigned caregiver (L0) -> doctor (L1) -> admin (L2)
     const toRole = nextLevel === 1 ? 'doctor' : 'admin';
     alert.escalationLevel = nextLevel;
     alert.escalatedAt = new Date(now);
+
+    // Update assignment to reflect escalation level without triggering clinical transfer
+    const patientDoc = await Patient.findById(alert.patient).select('assignedDoctor assignedCaregiver');
+    if (nextLevel === 1 && patientDoc?.assignedDoctor) {
+      alert.assignedTo = patientDoc.assignedDoctor;
+    }
+
     alert.escalationHistory.push({
       level: nextLevel,
       at: new Date(now),
       toRole,
-      reason: `Unacknowledged for ${Math.round((now - new Date(alert.createdAt).getTime()) / 1000)}s`,
+      assignedTo: alert.assignedTo || null,
+      reason: `Unacknowledged for ${Math.round((now - new Date(alert.createdAt).getTime()) / 1000)}s (escalated from ${level === 0 ? 'caregiver' : 'doctor'} to ${toRole})`,
     });
     await alert.save();
 
@@ -149,12 +160,79 @@ const runCoverageMonitor = async (io = null, now = Date.now()) => {
   return result.created ? result.alert : null;
 };
 
+/**
+ * Missed check-in monitor: if no caregiver is on duty for a patient
+ * for longer than CAREGIVER_CHECKIN_TIMEOUT_SECONDS, raise a caregiver_missed_checkin alert.
+ */
+const runMissedCheckinMonitor = async (io = null, now = Date.now()) => {
+  const activePatients = await Patient.find({ isActive: true }).select('patientId name assignedDoctor assignedCaregiver createdAt');
+  const alertsCreated = [];
+
+  for (const patient of activePatients) {
+    const query = {
+      $or: [
+        { patient: patient._id },
+        { patients: patient._id },
+      ],
+      status: 'on_duty',
+      checkOutAt: null,
+    };
+    if (patient.assignedCaregiver) {
+      query.$or.push({ caregiver: patient.assignedCaregiver }, { user: patient.assignedCaregiver });
+    }
+
+    const onDutyShift = await CaregiverShift.findOne(query);
+    if (onDutyShift) continue;
+
+    const historyQuery = {
+      $or: [
+        { patient: patient._id },
+        { patients: patient._id },
+      ],
+    };
+    if (patient.assignedCaregiver) {
+      historyQuery.$or.push({ caregiver: patient.assignedCaregiver }, { user: patient.assignedCaregiver });
+    }
+
+    const lastShift = await CaregiverShift.findOne(historyQuery).sort({ checkOutAt: -1, checkInAt: -1 });
+    const lastActiveTime = lastShift
+      ? new Date(lastShift.checkOutAt || lastShift.checkInAt).getTime()
+      : new Date(patient.createdAt || (now - CAREGIVER_CHECKIN_TIMEOUT_SECONDS * 1000 - 1000)).getTime();
+
+    if (now - lastActiveTime >= CAREGIVER_CHECKIN_TIMEOUT_SECONDS * 1000) {
+      const caregiverPrefix = patient.assignedCaregiver ? 'Assigned caregiver' : 'Caregiver';
+      const result = await createAlert(
+        {
+          patient: patient._id,
+          type: 'caregiver_missed_checkin',
+          severity: 'warning',
+          message: `${caregiverPrefix} has missed check-in for patient ${patient.name} (${patient.patientId}). No caregiver on duty for >${Math.round(CAREGIVER_CHECKIN_TIMEOUT_SECONDS / 60)} min.`,
+          assignedTo: patient.assignedCaregiver || patient.assignedDoctor || null,
+          dedupKey: buildDedupKey(patient._id, 'caregiver_missed_checkin'),
+          metadata: {
+            reason: 'missed_checkin_timeout',
+            timeoutSeconds: CAREGIVER_CHECKIN_TIMEOUT_SECONDS,
+            lastActiveTime: new Date(lastActiveTime).toISOString(),
+          },
+        },
+        io
+      );
+      if (result.created) {
+        alertsCreated.push(result.alert);
+      }
+    }
+  }
+
+  return alertsCreated;
+};
+
 const startPatientMonitor = (io = null) => {
   const run = async () => {
     try {
       await runDataQualityMonitor(io);
       await runEscalationCycle(io);
       await runCoverageMonitor(io);
+      await runMissedCheckinMonitor(io);
     } catch (error) {
       console.error('Patient monitor cycle failed:', error.message);
     }
@@ -168,8 +246,10 @@ const startPatientMonitor = (io = null) => {
 
 module.exports = {
   ACK_TIMEOUT_SECONDS,
+  CAREGIVER_CHECKIN_TIMEOUT_SECONDS,
   runDataQualityMonitor,
   runCoverageMonitor,
+  runMissedCheckinMonitor,
   runEscalationCycle,
   startPatientMonitor,
 };

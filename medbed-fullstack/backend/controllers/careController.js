@@ -93,11 +93,11 @@ exports.checkIn = async (req, res, next) => {
     const ids = Array.isArray(req.body.patients) ? req.body.patients : [];
     const { shift, created } = await caregiverService.checkIn(req.user, ids);
 
-    // A caregiver being present clears the "nobody is covering" escalation.
+    // A caregiver being present clears the "nobody is covering" escalation and missed check-in alerts.
     const io = req.app.get('io');
     const open = await Patient.find({ isActive: true }).select('_id');
     for (const p of open) {
-      await resolveAlertsByType(p._id, ['escalation'], io, 'A caregiver checked in.').catch(() => {});
+      await resolveAlertsByType(p._id, ['escalation', 'caregiver_missed_checkin'], io, 'A caregiver checked in.').catch(() => {});
     }
 
     await recordAudit({
@@ -108,7 +108,14 @@ exports.checkIn = async (req, res, next) => {
       actorRole: req.user.role,
       metadata: { patients: ids },
     });
-    if (io) io.emit('caregiver:presence', { userId: req.user._id, onDuty: true });
+    if (io) {
+      io.emit('caregiver:presence', { userId: req.user._id, onDuty: true });
+      io.emit('caregiver:checkin', {
+        caregiver: { id: req.user._id, name: req.user.name, role: req.user.role },
+        shift,
+        timestamp: new Date().toISOString(),
+      });
+    }
     res.status(created ? 201 : 200).json({ success: true, created, data: shift });
   } catch (error) {
     next(error);
@@ -128,7 +135,14 @@ exports.checkOut = async (req, res, next) => {
       metadata: { activity: shift.activity },
     });
     const io = req.app.get('io');
-    if (io) io.emit('caregiver:presence', { userId: req.user._id, onDuty: false });
+    if (io) {
+      io.emit('caregiver:presence', { userId: req.user._id, onDuty: false });
+      io.emit('caregiver:checkout', {
+        caregiver: { id: req.user._id, name: req.user.name, role: req.user.role },
+        shift,
+        timestamp: new Date().toISOString(),
+      });
+    }
     res.json({ success: true, data: shift });
   } catch (error) {
     next(error);

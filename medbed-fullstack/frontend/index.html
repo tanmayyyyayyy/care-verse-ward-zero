@@ -2100,6 +2100,7 @@ function mapPatient(patient){
 function selectPatient(idx){
   if(!PATIENTS[idx])return;
   currentPatient=PATIENTS[idx];
+  window.currentPatient=currentPatient;
   liveHR=currentPatient.hr;liveSpo2=currentPatient.spo2;liveRR=currentPatient.rr;
   const parts=currentPatient.bp.split('/').map(Number);liveBP=[parts[0]||0,parts[1]||0];
   hrHistory=[];spo2History=[];bpHistory=[];
@@ -2217,13 +2218,14 @@ async function refreshLiveState(){
 }
 
 async function runSensorScenario(scenario,btn){
-  if(!currentPatient||!currentPatient.apiId){showToast('❌ No patient selected');return;}
+  const targetId=currentPatient?.apiId||currentPatient?._id;
+  if(!currentPatient||!targetId){showToast('❌ No patient selected');return;}
   document.querySelectorAll('#page-simulation .filter-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   const result=document.getElementById('scenarioResult');
   if(result)result.textContent='Injecting '+scenario+' readings...';
   try{
-    const data=await apiFetch('/api/patients/'+currentPatient.apiId+'/simulate',{method:'POST',body:JSON.stringify({scenario,steps:scenario==='slow_decline'?6:1})});
+    const data=await apiFetch('/api/patients/'+targetId+'/simulate',{method:'POST',body:JSON.stringify({scenario,steps:scenario==='slow_decline'?6:1})});
     const last=data.data[data.data.length-1];
     if(result)result.innerHTML='✅ '+data.steps+' reading(s) ingested · last risk: <b>'+last.predictedRisk+'</b> · source: '+last.assessmentSource+' · alerts created: '+last.alertsCreated;
     await loadLiveData();

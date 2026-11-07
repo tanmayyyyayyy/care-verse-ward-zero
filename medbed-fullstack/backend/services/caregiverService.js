@@ -41,31 +41,121 @@ const autoCloseStaleShifts = async (now = Date.now()) => {
   return stale.length;
 };
 
-const getOpenShift = (userId) => CaregiverShift.findOne({ user: userId, checkOutAt: null });
+const getOpenShift = (userId) =>
+  CaregiverShift.findOne({
+    $or: [{ caregiver: userId }, { user: userId }],
+    checkOutAt: null,
+    status: { $ne: 'off_duty' },
+  });
 
-const checkIn = async (user, patientIds = []) => {
+const checkIn = async (user, patientIds = [], notes = '') => {
   const existing = await getOpenShift(user._id);
+  const pList = Array.isArray(patientIds) ? patientIds : patientIds ? [patientIds] : [];
   if (existing) {
     existing.lastActivityAt = new Date();
-    if (patientIds.length) existing.patients = patientIds;
+    existing.status = 'on_duty';
+    if (pList.length) {
+      existing.patients = pList;
+      existing.patient = pList[0];
+    }
+    if (notes) existing.notes = notes;
     await existing.save();
     return { shift: existing, created: false };
   }
   const shift = await CaregiverShift.create({
+    caregiver: user._id,
     user: user._id,
     userName: user.name,
     role: user.role,
-    patients: patientIds,
+    patient: pList[0] || null,
+    patients: pList,
+    status: 'on_duty',
+    notes: notes || '',
   });
   return { shift, created: true };
 };
 
-const checkOut = async (user) => {
+const checkOut = async (user, notes = '') => {
   const shift = await getOpenShift(user._id);
   if (!shift) return null;
   shift.checkOutAt = new Date();
+  shift.status = 'off_duty';
+  if (notes) shift.notes = shift.notes ? `${shift.notes} | ${notes}` : notes;
   await shift.save();
   return shift;
+};
+
+const getOnDutyShifts = async () => {
+  await autoCloseStaleShifts();
+  return CaregiverShift.find({
+    checkOutAt: null,
+    status: 'on_duty',
+  })
+    .populate('caregiver', 'name email role department')
+    .populate('patient', 'patientId name bed ward')
+    .sort({ checkInAt: -1 });
+};
+
+const getCaregiverPerformance = async ({ sinceHours = 24, now = Date.now() } = {}) => {
+  const since = new Date(now - sinceHours * 3600 * 1000);
+  const [alerts, staff, missedShifts] = await Promise.all([
+    Alert.find({
+      $or: [
+        { isAcknowledged: true, acknowledgedAt: { $gte: since } },
+        { isDismissed: true, dismissedAt: { $gte: since } },
+        { createdAt: { $gte: since } },
+      ],
+    }).select('isAcknowledged acknowledgedBy acknowledgmentLatencyMs isDismissed dismissedBy createdAt severity type'),
+    User.find({ isActive: { $ne: false }, role: { $in: ['nurse', 'doctor'] } }).select('name role department email'),
+    CaregiverShift.find({ status: 'missed', createdAt: { $gte: since } }).select('caregiver user'),
+  ]);
+
+  const userLatencyMap = new Map();
+  const userHandledCount = new Map();
+  const missedCheckinCount = new Map();
+
+  for (const shift of missedShifts) {
+    const uid = String(shift.caregiver || shift.user || '');
+    if (uid) {
+      missedCheckinCount.set(uid, (missedCheckinCount.get(uid) || 0) + 1);
+    }
+  }
+
+  for (const alert of alerts) {
+    if (alert.isAcknowledged && alert.acknowledgedBy) {
+      const uid = String(alert.acknowledgedBy);
+      userHandledCount.set(uid, (userHandledCount.get(uid) || 0) + 1);
+      if (typeof alert.acknowledgmentLatencyMs === 'number' && alert.acknowledgmentLatencyMs >= 0) {
+        if (!userLatencyMap.has(uid)) userLatencyMap.set(uid, []);
+        userLatencyMap.get(uid).push(alert.acknowledgmentLatencyMs);
+      }
+    } else if (alert.isDismissed && alert.dismissedBy) {
+      const uid = String(alert.dismissedBy);
+      userHandledCount.set(uid, (userHandledCount.get(uid) || 0) + 1);
+    }
+  }
+
+  return staff.map((person) => {
+    const uid = String(person._id);
+    const latencies = userLatencyMap.get(uid) || [];
+    const alertsHandled = userHandledCount.get(uid) || 0;
+    const missed = missedCheckinCount.get(uid) || 0;
+    const avgAckLatencyMs =
+      latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : null;
+    const worstAckLatencyMs = latencies.length > 0 ? Math.max(...latencies) : null;
+
+    return {
+      caregiverId: uid,
+      name: person.name,
+      role: person.role,
+      department: person.department || '',
+      avgAckLatencyMs,
+      worstAckLatencyMs,
+      alertsHandled,
+      missedCheckIns: missed,
+      latencySamples: latencies.length,
+    };
+  });
 };
 
 /** Refresh presence after a meaningful action. Never throws: presence must not break clinical flows. */
@@ -195,6 +285,8 @@ module.exports = {
   checkIn,
   checkOut,
   countOnDuty,
+  getCaregiverPerformance,
+  getOnDutyShifts,
   getOpenShift,
   getResponseMetrics,
   getRoster,

@@ -573,6 +573,7 @@
     renderPipelines();
     renderCare();
     renderCaregivers();
+    renderDashboardCaregiverWidget();
   };
 
   const scheduleRefresh = (delay = 300) => {
@@ -597,9 +598,92 @@
       if (activePage() === 'caregivers') renderCaregivers();
     });
     sock.on('caregiver:presence', () => scheduleRefresh(300));
-    ['alert:new', 'alert:resolved', 'alert:acknowledged'].forEach((evt) => sock.on(evt, () => scheduleRefresh(800)));
+    sock.on('caregiver:checkin', (data) => {
+      toast(`Caregiver ${data?.caregiver?.name || ''} checked in`, false);
+      scheduleRefresh(200);
+    });
+    sock.on('caregiver:checkout', (data) => {
+      toast(`Caregiver ${data?.caregiver?.name || ''} checked out`, false);
+      scheduleRefresh(200);
+    });
+    ['alert:new', 'alert:resolved', 'alert:acknowledged', 'alert:escalated'].forEach((evt) => sock.on(evt, () => scheduleRefresh(800)));
     hookSocket.done = true;
     return true;
+  };
+
+  const renderDashboardCaregiverWidget = () => {
+    const dash = document.getElementById('page-dashboard');
+    if (!dash) return;
+    let card = document.getElementById('wzDashCaregiverCard');
+    if (!card) {
+      const col3 = dash.querySelectorAll('.dash-col')[2];
+      if (col3) {
+        card = document.createElement('div');
+        card.id = 'wzDashCaregiverCard';
+        card.className = 'card';
+        col3.insertBefore(card, col3.firstChild);
+      }
+    }
+    if (!card) return;
+
+    const r = state.roster;
+    if (!r) {
+      card.innerHTML = '<div class="ch"><span class="ct">Caregivers On Duty</span><span class="cb">...</span></div><div class="wz-muted" style="padding:10px;">Loading caregiver status...</div>';
+      return;
+    }
+    const onDutyList = r.caregivers.filter((c) => c.onDuty);
+    const m = r.metrics;
+    const items = onDutyList.length
+      ? onDutyList
+          .map(
+            (c) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--gray-100);font-size:11px;">
+              <div><b>${esc(c.name)}</b> <span style="color:var(--gray-500);">(${esc(c.role)})</span></div>
+              <div>${chip(c.presence, c.presence === 'active' ? 'Active' : c.presence === 'idle' ? 'Idle' : 'No response')}</div>
+            </div>`
+          )
+          .join('')
+      : '<div style="color:var(--red-600);font-size:11px;padding:6px 0;">⚠ No caregiver is currently checked in!</div>';
+
+    card.innerHTML = `
+      <div class="ch">
+        <span class="ct">Caregivers On Duty</span>
+        <span class="cb ${onDutyList.length ? 'cb-blue' : 'cb-red'}">${onDutyList.length} ACTIVE</span>
+      </div>
+      <div style="margin-bottom:8px;">${items}</div>
+      <div style="font-size:10px;color:var(--gray-500);margin-bottom:8px;">
+        Median response: <b>${esc(fmtMs(m?.medianResponseMs))}</b> · Awaiting ACK: <b>${m?.unacknowledged || 0}</b>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="wz-btn ok" id="wzDashCheckIn" type="button" style="padding:4px 8px;font-size:11px;flex:1;">Check In</button>
+        <button class="wz-btn ghost" id="wzDashCheckOut" type="button" style="padding:4px 8px;font-size:11px;flex:1;">Check Out</button>
+        <button class="wz-btn ghost" onclick="switchPage('caregivers')" type="button" style="padding:4px 8px;font-size:11px;">View Hub</button>
+      </div>
+    `;
+
+    const btnIn = document.getElementById('wzDashCheckIn');
+    if (btnIn) {
+      btnIn.onclick = async () => {
+        try {
+          const res = await post('/api/caregivers/check-in', {});
+          toast('You checked in on duty.', false);
+          await refresh();
+        } catch (err) {
+          toast(err.message || 'Check-in failed', true);
+        }
+      };
+    }
+    const btnOut = document.getElementById('wzDashCheckOut');
+    if (btnOut) {
+      btnOut.onclick = async () => {
+        try {
+          await post('/api/caregivers/check-out', {});
+          toast('You checked out from duty.', false);
+          await refresh();
+        } catch (err) {
+          toast(err.message || 'Check-out failed', true);
+        }
+      };
+    }
   };
 
   const install = () => {
