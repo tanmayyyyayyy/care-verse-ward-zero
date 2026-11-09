@@ -5,7 +5,7 @@
 **Hackathon Initiative:** Operation Ward Zero (Healthcare Technology Hackathon)  
 **Mission Loop:** Sense → Understand → Predict → Alert → Respond  
 **Repository:** https://github.com/tanmayyyyayyy/care-verse-ward-zero  
-**Demonstration Video:** `TODO (team): [Demo Video URL]`  
+**Demonstration Video:** https://youtu.be/1mOUR5gzijk  
 **Team Identification:** CRADUO — Tanmay Jain & Saanchi Jain  
 **System Status:** Functional Engineering Prototype (Synthetic Data Only; Non-Clinical Device)  
 **Date of Verification:** November 2026  

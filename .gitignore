@@ -10,3 +10,5 @@ __pycache__/
 *.zip
 medbed-fullstack/ai-service/*.pkl
 medbed-fullstack/backend/data/
+*.mp4
+scratch/
